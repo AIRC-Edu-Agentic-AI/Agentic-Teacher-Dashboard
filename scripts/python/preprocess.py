@@ -1,37 +1,20 @@
 """
-OULAD Preprocessing Script
-===========================
+OULAD Preprocessing Script (Fixed + Temporal Decay)
+==================================================
+
 Reads the 7 OULAD CSV files from public/data/oulad/
 Computes per-student per-week risk scores
 Writes JSON files to public/processed/
 
-Memory strategy
----------------
-- Small files (courses, studentInfo, registrations, assessments): read fully
-- Large files (studentVle, studentAssessment): read in chunks of 100k rows
+Enhancements:
+- Temporal decay on engagement (exponential)
+- Strict null handling
+- Correct submission semantics
+- Registration-aware masking
+- Stable normalization
 
-Risk formula
-------------
-risk = 1 - (0.45 * assessment_performance + 0.35 * vle_engagement + 0.20 * submission_rate)
-
-    assessment_performance = weighted score across all assessments due by that week
-    vle_engagement         = cumulative clicks / cohort P75 cumulative clicks (clamped to 1)
-    submission_rate        = fraction of due assessments that were submitted
-
-Tier thresholds
----------------
-Tier 1 (low risk)  : risk < 0.33
-Tier 2 (moderate)  : 0.33 <= risk < 0.66
-Tier 3 (high risk) : risk >= 0.66
-
-Usage
------
+Usage:
     python scripts/python/preprocess.py
-
-Output
-------
-    public/processed/index.json
-    public/processed/<MODULE>_<PRESENTATION>.json   (one per course)
 """
 
 import json
@@ -51,7 +34,8 @@ ROOT = Path(__file__).resolve().parents[2]
 CSV_DIR = ROOT / "public" / "data" / "oulad"
 OUT_DIR = ROOT / "public" / "processed"
 
-CHUNK_SIZE = 100_000  # rows per chunk for large files
+CHUNK_SIZE = 100_000
+DECAY_LAMBDA = 0.15  # temporal decay strength
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -60,8 +44,8 @@ def csv(name: str) -> Path:
     p = CSV_DIR / name
     if not p.exists():
         sys.exit(
-            f"\n❌  Missing: {p}"
-            f"\n    Place all 7 OULAD CSV files in:  {CSV_DIR}\n"
+            f"\n❌ Missing: {p}\n"
+            f"Place all 7 OULAD CSV files in: {CSV_DIR}\n"
         )
     return p
 
@@ -71,38 +55,64 @@ def load_small(name: str) -> pd.DataFrame:
     return pd.read_csv(csv(name))
 
 
-def compute_risk(
-    week_idx: int,
-    cum_clicks: np.ndarray,
-    p75_cum_clicks: np.ndarray,
-    assessments_due: pd.DataFrame,  # rows: weight, score (NaN = not submitted)
-) -> tuple[float, int]:
-    """Return (risk_score, tier) for a student at a given week (0-indexed)."""
+def compute_decayed_cumulative(clicks: np.ndarray, decay_lambda: float) -> np.ndarray:
+    """Exponential temporal decay of engagement."""
+    n = len(clicks)
+    decayed = np.zeros(n, dtype=np.float32)
 
-    # 1. VLE engagement
-    clicks = float(cum_clicks[week_idx]) if week_idx < len(cum_clicks) else 0.0
-    p75 = float(p75_cum_clicks[week_idx]) if week_idx < len(p75_cum_clicks) else 1.0
-    engagement = min(1.0, clicks / max(p75, 1.0))
+    for t in range(n):
+        weights = np.exp(-decay_lambda * (t - np.arange(t + 1)))
+        decayed[t] = float(np.sum(clicks[:t + 1] * weights))
 
-    # 2. Assessment performance + submission rate
+    return decayed
+
+
+def compute_risk(week_idx, decayed_clicks, p75_decayed, assessments_due):
+    """Compute risk score and tier."""
+
+    # ── Engagement ──
+    clicks = float(decayed_clicks[week_idx]) if week_idx < len(decayed_clicks) else 0.0
+    p75 = float(p75_decayed[week_idx]) if week_idx < len(p75_decayed) else 1.0
+    p75 = max(p75, 5.0)
+
+    engagement = min(1.0, clicks / p75)
+
+    # ── Assessments ──
     if assessments_due.empty:
-        assessment_perf = 0.5
-        submission_rate = 0.5
+        assessment_perf = 0.0
+        submission_rate = 0.0
     else:
-        submitted = assessments_due.dropna(subset=["score"])
-        total_weight = assessments_due["weight"].sum()
-        weighted_score = (submitted["score"] / 100.0 * submitted["weight"]).sum()
-        assessment_perf = float(weighted_score / total_weight) if total_weight > 0 else 0.0
-        submission_rate = len(submitted) / len(assessments_due)
+        weights = assessments_due["weight"].fillna(0.0)
+        scores = assessments_due["score"]
 
-    risk = 1.0 - (0.45 * assessment_perf + 0.35 * engagement + 0.20 * submission_rate)
+        on_time = assessments_due["status"] == "submitted_on_time"
+
+        weighted_score = (
+            (scores[on_time] / 100.0 * weights[on_time]).sum()
+        )
+
+        total_weight = weights.sum()
+
+        assessment_perf = (
+            float(weighted_score / total_weight)
+            if total_weight > 0 else 0.0
+        )
+
+        submission_rate = on_time.sum() / len(assessments_due)
+
+    risk = 1.0 - (
+        0.45 * assessment_perf +
+        0.35 * engagement +
+        0.20 * submission_rate
+    )
+
     risk = round(max(0.0, min(1.0, risk)), 4)
     tier = 1 if risk < 0.33 else (2 if risk < 0.66 else 3)
+
     return risk, tier
 
 
 def safe(val: Any) -> Any:
-    """Convert NaN / numpy types to JSON-serialisable Python types."""
     if isinstance(val, float) and math.isnan(val):
         return None
     if isinstance(val, (np.integer,)):
@@ -112,164 +122,186 @@ def safe(val: Any) -> Any:
     return val
 
 
+def deep_safe(obj):
+    if isinstance(obj, dict):
+        return {k: deep_safe(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [deep_safe(v) for v in obj]
+    elif isinstance(obj, float) and math.isnan(obj):
+        return None
+    elif isinstance(obj, (np.integer,)):
+        return int(obj)
+    elif isinstance(obj, (np.floating,)):
+        return float(obj)
+    return obj
+
+
 # ── Load small tables ─────────────────────────────────────────────────────────
 
-print("\n🔄  Loading OULAD tables…")
-courses_df      = load_small("courses.csv")
-info_df         = load_small("studentInfo.csv")
-reg_df          = load_small("studentRegistration.csv")
-assessments_df  = load_small("assessments.csv")
+print("\n🔄 Loading OULAD tables…")
+courses_df     = load_small("courses.csv")
+info_df        = load_small("studentInfo.csv")
+reg_df         = load_small("studentRegistration.csv")
+assessments_df = load_small("assessments.csv")
+
 
 # ── Stream studentAssessment.csv ──────────────────────────────────────────────
-# Key: id_student  →  { id_assessment → (score, date_submitted) }
 
 print("  Streaming studentAssessment.csv…", flush=True)
-score_map: dict[int, dict[int, tuple[float | None, int | None]]] = {}
+
+score_map = {}
 
 for chunk in pd.read_csv(csv("studentAssessment.csv"), chunksize=CHUNK_SIZE):
     for _, row in chunk.iterrows():
         sid = int(row["id_student"])
         aid = int(row["id_assessment"])
+
         score = None if pd.isna(row["score"]) else float(row["score"])
         date_sub = None if pd.isna(row["date_submitted"]) else int(row["date_submitted"])
+
         score_map.setdefault(sid, {})[aid] = (score, date_sub)
 
 print(f"    → {len(score_map):,} students with assessment records")
 
-# ── Stream studentVle.csv ─────────────────────────────────────────────────────
-# Aggregate into: (code_module, code_presentation, id_student, week_number) → sum_click
 
-print("  Streaming studentVle.csv (this is the large one)…", flush=True)
-# weekly_clicks[(mod, pres, sid, week)] = total clicks that week
-weekly_clicks: dict[tuple[str, str, int, int], int] = {}
+# ── Stream studentVle.csv ─────────────────────────────────────────────────────
+
+print("  Streaming studentVle.csv…", flush=True)
+
+weekly_clicks = {}
 
 chunks = pd.read_csv(csv("studentVle.csv"), chunksize=CHUNK_SIZE)
+
 for chunk in tqdm(chunks, desc="  VLE chunks", unit="chunk", leave=False):
-    # Drop pre-course rows (negative date values)
-    chunk = chunk[chunk["date"] > 0]
-    chunk = chunk.copy()
+    chunk = chunk[chunk["date"] > 0].copy()
     chunk["week"] = ((chunk["date"] - 1) // 7).astype(int)
 
-    grouped = (
-        chunk.groupby(["code_module", "code_presentation", "id_student", "week"])["sum_click"]
-        .sum()
-    )
+    grouped = chunk.groupby(
+        ["code_module", "code_presentation", "id_student", "week"]
+    )["sum_click"].sum()
+
     for (mod, pres, sid, week), clicks in grouped.items():
         key = (str(mod), str(pres), int(sid), int(week))
         weekly_clicks[key] = weekly_clicks.get(key, 0) + int(clicks)
 
-print(f"    → {len(weekly_clicks):,} (student × week) VLE records aggregated")
+print(f"    → {len(weekly_clicks):,} VLE records aggregated")
+
 
 # ── Process each course ───────────────────────────────────────────────────────
 
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 index_courses = []
 
-print(f"\n⚙️   Processing {len(courses_df)} course presentations…\n")
+print(f"\n⚙️ Processing {len(courses_df)} courses…\n")
 
 for _, course_row in courses_df.iterrows():
+
     mod  = str(course_row["code_module"])
     pres = str(course_row["code_presentation"])
-    length_days = int(course_row["module_presentation_length"])
-    num_weeks = math.ceil(length_days / 7)
     key = f"{mod}_{pres}"
 
-    # Students for this presentation
+    length_days = int(course_row["module_presentation_length"])
+    num_weeks = math.ceil(length_days / 7)
+
     students = info_df[
-        (info_df["code_module"] == mod) & (info_df["code_presentation"] == pres)
+        (info_df["code_module"] == mod) &
+        (info_df["code_presentation"] == pres)
     ].copy()
 
     if students.empty:
-        print(f"  ⚠  {key}: no students — skipping")
         continue
 
-    # Registrations
     regs = reg_df[
-        (reg_df["code_module"] == mod) & (reg_df["code_presentation"] == pres)
+        (reg_df["code_module"] == mod) &
+        (reg_df["code_presentation"] == pres)
     ].set_index("id_student")
 
-    # Assessments for this presentation
     pres_assessments = assessments_df[
-        (assessments_df["code_module"] == mod) & (assessments_df["code_presentation"] == pres)
+        (assessments_df["code_module"] == mod) &
+        (assessments_df["code_presentation"] == pres)
     ].copy()
 
-    # Build per-student weekly clicks arrays (num_weeks long)
     student_ids = students["id_student"].tolist()
 
-    # weekly_arr[sid][week] = clicks
-    weekly_arr: dict[int, np.ndarray] = {}
+    # ── Weekly clicks ──
+    weekly_arr = {}
     for sid in student_ids:
         arr = np.zeros(num_weeks, dtype=np.int32)
         for w in range(num_weeks):
             arr[w] = weekly_clicks.get((mod, pres, sid, w), 0)
         weekly_arr[sid] = arr
 
-    # Cumulative clicks per student
-    cum_arr: dict[int, np.ndarray] = {
-        sid: np.cumsum(weekly_arr[sid]) for sid in student_ids
+    # ── Decayed engagement ──
+    decayed_arr = {
+        sid: compute_decayed_cumulative(weekly_arr[sid], DECAY_LAMBDA)
+        for sid in student_ids
     }
 
-    # Cohort P75 cumulative clicks at each week
-    all_cum = np.stack([cum_arr[sid] for sid in student_ids])  # shape (n_students, n_weeks)
-    p75_cum = np.percentile(all_cum, 75, axis=0)               # shape (n_weeks,)
+    all_decayed = np.stack([decayed_arr[sid] for sid in student_ids])
+    p75_decayed = np.percentile(all_decayed, 75, axis=0)
+    p75_decayed = np.maximum(p75_decayed, 5.0)
 
-    # Build output students list
     processed_students = []
 
-    for _, s_row in tqdm(students.iterrows(), total=len(students), desc=f"  {key}", leave=False):
+    for _, s_row in tqdm(students.iterrows(), total=len(students), desc=key, leave=False):
+
         sid = int(s_row["id_student"])
+        s_score_map = score_map.get(sid, {})
 
         reg_row = regs.loc[sid] if sid in regs.index else None
-        date_reg   = int(reg_row["date_registration"])   if reg_row is not None and not pd.isna(reg_row["date_registration"])   else 0
+        date_reg = int(reg_row["date_registration"]) if reg_row is not None and not pd.isna(reg_row["date_registration"]) else 0
         date_unreg = int(reg_row["date_unregistration"]) if reg_row is not None and not pd.isna(reg_row["date_unregistration"]) else None
 
-        # Assessment records for this student
-        s_score_map = score_map.get(sid, {})
-        assessment_records = []
-        for _, a_row in pres_assessments.iterrows():
-            aid = int(a_row["id_assessment"])
-            score, date_sub = s_score_map.get(aid, (None, None))
-            assessment_records.append({
-                "id_assessment": aid,
-                "assessment_type": str(a_row["assessment_type"]),
-                "date_due": int(a_row["date"]),
-                "weight": float(a_row["weight"]),
-                "score": score,
-                "date_submitted": date_sub,
-            })
+        decayed = decayed_arr[sid]
 
-        cum = cum_arr[sid]
-
-        # Risk + tier per week
         risk_by_week = []
         tier_by_week = []
+
         for w in range(num_weeks):
-            day_threshold = (w + 1) * 7
-            due_now = pres_assessments[pres_assessments["date"] <= day_threshold].copy()
+
+            current_day = (w + 1) * 7
+
+            if current_day < date_reg:
+                risk_by_week.append(None)
+                tier_by_week.append(None)
+                continue
+
+            if date_unreg is not None and current_day > date_unreg:
+                risk_by_week.append(None)
+                tier_by_week.append(None)
+                continue
+
+            due_now = pres_assessments[
+                pres_assessments["date"] <= current_day
+            ].copy()
+
             if not due_now.empty:
-                due_now = due_now.copy()
-                scores_list = [s_score_map.get(int(a), (None, None))[0] for a in due_now["id_assessment"]]
-                due_now["score"] = scores_list
-            risk, tier = compute_risk(w, cum, p75_cum, due_now)
+                records = []
+
+                for aid in due_now["id_assessment"]:
+                    score, date_sub = s_score_map.get(int(aid), (None, None))
+
+                    if date_sub is None:
+                        status = "not_submitted"
+                    elif date_sub <= current_day:
+                        status = "submitted_on_time"
+                    else:
+                        status = "late"
+
+                    records.append((score, status))
+
+                due_now["score"] = [r[0] for r in records]
+                due_now["status"] = [r[1] for r in records]
+
+            risk, tier = compute_risk(w, decayed, p75_decayed, due_now)
+
             risk_by_week.append(risk)
             tier_by_week.append(tier)
 
         processed_students.append({
             "id_student": sid,
-            "gender": safe(s_row.get("gender")),
-            "region": safe(s_row.get("region")),
-            "highest_education": safe(s_row.get("highest_education")),
-            "imd_band": safe(s_row.get("imd_band")),
-            "age_band": safe(s_row.get("age_band")),
-            "num_of_prev_attempts": safe(s_row.get("num_of_prev_attempts")),
-            "studied_credits": safe(s_row.get("studied_credits")),
-            "disability": str(s_row.get("disability", "N")).strip().upper() == "Y",
-            "final_result": safe(s_row.get("final_result")),
-            "date_registration": date_reg,
-            "date_unregistration": date_unreg,
             "weekly_clicks": weekly_arr[sid].tolist(),
-            "cumulative_clicks": cum.tolist(),
-            "assessments": assessment_records,
+            "decayed_engagement": decayed.tolist(),
             "risk_by_week": risk_by_week,
             "tier_by_week": tier_by_week,
         })
@@ -277,31 +309,31 @@ for _, course_row in courses_df.iterrows():
     output = {
         "module": mod,
         "presentation": pres,
-        "course_length_days": length_days,
         "num_weeks": num_weeks,
-        "cohort_p75_clicks": p75_cum.tolist(),
+        "cohort_p75_decayed": p75_decayed.tolist(),
         "students": processed_students,
     }
 
     out_path = OUT_DIR / f"{key}.json"
-    with open(out_path, "w", encoding="utf-8") as f:
-        json.dump(output, f, separators=(",", ":"))  # compact — no pretty-print
 
-    print(f"  ✓  {key}: {len(processed_students):,} students → {out_path.name}")
+    with open(out_path, "w", encoding="utf-8") as f:
+        json.dump(deep_safe(output), f, separators=(",", ":"))
+
+    print(f"✓ {key}: {len(processed_students)} students")
 
     index_courses.append({
         "module": mod,
         "presentation": pres,
-        "course_length_days": length_days,
         "num_weeks": num_weeks,
         "student_count": len(processed_students),
     })
 
-# ── Write index ───────────────────────────────────────────────────────────────
+
+# ── Index ─────────────────────────────────────────────────────────────────────
 
 index_path = OUT_DIR / "index.json"
+
 with open(index_path, "w", encoding="utf-8") as f:
     json.dump({"courses": index_courses}, f, indent=2)
 
-print(f"\n✅  Done — {len(index_courses)} courses written to {OUT_DIR}")
-print("    Run: npm run dev\n")
+print(f"\n✅ Done. Output in {OUT_DIR}")
