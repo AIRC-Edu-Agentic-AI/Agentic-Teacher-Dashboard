@@ -119,6 +119,7 @@ courses_df      = load_small("courses.csv")
 info_df         = load_small("studentInfo.csv")
 reg_df          = load_small("studentRegistration.csv")
 assessments_df  = load_small("assessments.csv")
+assessments_df["date"] = pd.to_numeric(assessments_df["date"], errors="coerce")
 
 # ── Stream studentAssessment.csv ──────────────────────────────────────────────
 # Key: id_student  →  { id_assessment → (score, date_submitted) }
@@ -130,7 +131,7 @@ for chunk in pd.read_csv(csv("studentAssessment.csv"), chunksize=CHUNK_SIZE):
     for _, row in chunk.iterrows():
         sid = int(row["id_student"])
         aid = int(row["id_assessment"])
-        score = None if pd.isna(row["score"]) else float(row["score"])
+        score = None if (pd.isna(row["score"]) or str(row["score"]).strip() == "?") else float(row["score"])
         date_sub = None if pd.isna(row["date_submitted"]) else int(row["date_submitted"])
         score_map.setdefault(sid, {})[aid] = (score, date_sub)
 
@@ -220,8 +221,8 @@ for _, course_row in courses_df.iterrows():
         sid = int(s_row["id_student"])
 
         reg_row = regs.loc[sid] if sid in regs.index else None
-        date_reg   = int(reg_row["date_registration"])   if reg_row is not None and not pd.isna(reg_row["date_registration"])   else 0
-        date_unreg = int(reg_row["date_unregistration"]) if reg_row is not None and not pd.isna(reg_row["date_unregistration"]) else None
+        date_reg   = int(reg_row["date_registration"])   if reg_row is not None and not pd.isna(reg_row["date_registration"]) and str(reg_row["date_registration"]).strip() != "?"  else 0
+        date_unreg = int(reg_row["date_unregistration"]) if reg_row is not None and not pd.isna(reg_row["date_unregistration"]) and str(reg_row["date_unregistration"]).strip() != "?" else None
 
         # Assessment records for this student
         s_score_map = score_map.get(sid, {})
@@ -232,7 +233,7 @@ for _, course_row in courses_df.iterrows():
             assessment_records.append({
                 "id_assessment": aid,
                 "assessment_type": str(a_row["assessment_type"]),
-                "date_due": int(a_row["date"]),
+                "date_due": int(a_row["date"]) if pd.notna(a_row["date"]) else None,
                 "weight": float(a_row["weight"]),
                 "score": score,
                 "date_submitted": date_sub,
