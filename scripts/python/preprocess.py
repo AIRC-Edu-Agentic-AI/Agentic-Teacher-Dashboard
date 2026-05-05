@@ -298,8 +298,34 @@ for _, course_row in courses_df.iterrows():
             risk_by_week.append(risk)
             tier_by_week.append(tier)
 
+        student_assessments = []
+        for _, a_row in pres_assessments.iterrows():
+            aid = int(a_row["id_assessment"])
+            score, date_sub = s_score_map.get(aid, (None, None))
+            date_due = None if pd.isna(a_row["date"]) else int(a_row["date"])
+            student_assessments.append({
+                "id_assessment": aid,
+                "assessment_type": str(a_row["assessment_type"]),
+                "date_due": date_due,
+                "weight": float(a_row["weight"]) if not pd.isna(a_row["weight"]) else None,
+                "score": score,
+                "date_submitted": date_sub,
+            })
+
         processed_students.append({
             "id_student": sid,
+            "gender": str(s_row["gender"]),
+            "region": str(s_row["region"]),
+            "highest_education": str(s_row["highest_education"]),
+            "imd_band": None if pd.isna(s_row["imd_band"]) else str(s_row["imd_band"]),
+            "age_band": str(s_row["age_band"]),
+            "num_of_prev_attempts": int(s_row["num_of_prev_attempts"]),
+            "studied_credits": int(s_row["studied_credits"]),
+            "disability": str(s_row["disability"]) == "Y",
+            "final_result": str(s_row["final_result"]),
+            "date_registration": date_reg,
+            "date_unregistration": date_unreg,
+            "assessments": student_assessments,
             "weekly_clicks": weekly_arr[sid].tolist(),
             "decayed_engagement": decayed.tolist(),
             "risk_by_week": risk_by_week,

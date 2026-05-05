@@ -9,6 +9,7 @@ import { container } from '../../../di/container'
 import { useContextStore } from '../../../shared/stores/contextStore'
 import { RiskTilesRow } from '../components/RiskTilesRow'
 import { TierDistributionChart } from '../components/TierDistributionChart'
+import { MarkDistributionChart } from '../components/MarkDistributionChart'
 import { StudentRiskTable } from '../components/StudentRiskTable'
 import type { StudentProfile } from '../../../types/domain'
 
@@ -152,14 +153,17 @@ export function DashboardView() {
           <>
             <RiskTilesRow students={students} currentWeek={currentWeek} />
 
-            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: 2, mb: 2 }}>
+            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: 2, mb: 2, alignItems: 'start' }}>
               <StudentRiskTable
                 students={students}
                 currentWeek={currentWeek}
                 onSelect={handleStudentSelect}
                 selectedId={useContextStore.getState().activeStudent?.id_student ?? null}
               />
-              <TierDistributionChart students={students} numWeeks={numWeeks} currentWeek={currentWeek} />
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <TierDistributionChart students={students} numWeeks={numWeeks} currentWeek={currentWeek} />
+                <MarkDistributionChart students={students} currentWeek={currentWeek} />
+              </Box>
             </Box>
           </>
         )}

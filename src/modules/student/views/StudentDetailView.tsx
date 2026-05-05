@@ -54,7 +54,7 @@ export function StudentDetailView() {
   const vleData = student.weekly_clicks.map((c, i) => ({ week: i + 1, clicks: c }))
 
   // Assessment table
-  const assessments = [...student.assessments].sort((a, b) => a.date_due - b.date_due)
+  const assessments = [...(student.assessments ?? [])].sort((a, b) => (a.date_due ?? 0) - (b.date_due ?? 0))
 
   const handleOpenChat = () => {
     setActiveStudent(student)
