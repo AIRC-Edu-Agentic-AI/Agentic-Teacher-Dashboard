@@ -21,7 +21,7 @@ export function TierDistributionChart({ students, numWeeks, currentWeek }: Props
   })
 
   return (
-    <Card elevation={0} sx={{ borderRadius: 2, border: '1px solid #E5E3DC', bgcolor: '#fff', height: '100%' }}>
+    <Card elevation={0} sx={{ borderRadius: 2, border: '1px solid #E5E3DC', bgcolor: '#fff' }}>
       <CardContent>
         <Typography sx={{ fontSize: 13, fontWeight: 500, color: '#0A1628', fontFamily: '"IBM Plex Sans", sans-serif', mb: 2 }}>
           Tier distribution over time

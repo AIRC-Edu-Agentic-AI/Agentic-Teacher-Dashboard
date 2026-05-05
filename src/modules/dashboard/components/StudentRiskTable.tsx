@@ -121,6 +121,7 @@ export function StudentRiskTable({ students, currentWeek, onSelect, selectedId }
                 const tier = (s.tier_by_week[weekIdx] ?? 1) as Tier
                 const tc = TIER_COLORS[tier]
                 const selected = s.id_student === selectedId
+                const withdrawn = s.final_result === 'Withdrawn'
 
                 return (
                   <TableRow
@@ -128,13 +129,23 @@ export function StudentRiskTable({ students, currentWeek, onSelect, selectedId }
                     onClick={() => onSelect(s)}
                     sx={{
                       cursor: 'pointer',
+                      opacity: withdrawn ? 0.55 : 1,
                       bgcolor: selected ? '#F0FDF8' : 'transparent',
                       '&:hover': { bgcolor: '#F8F7F4' },
                       borderLeft: selected ? '3px solid #1D9E75' : '3px solid transparent',
                     }}
                   >
                     <TableCell sx={{ fontFamily: '"IBM Plex Mono", monospace', fontSize: 12, color: '#0A1628' }}>
-                      #{s.id_student}
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexWrap: 'wrap' }}>
+                        #{s.id_student}
+                        {withdrawn && (
+                          <Chip
+                            label="Withdrawn"
+                            size="small"
+                            sx={{ fontSize: 10, height: 16, bgcolor: '#F3F4F6', color: '#6B7280', fontFamily: '"IBM Plex Mono", monospace', '& .MuiChip-label': { px: 0.75 } }}
+                          />
+                        )}
+                      </Box>
                     </TableCell>
                     <TableCell sx={{ fontFamily: '"IBM Plex Mono", monospace', fontSize: 11, color: '#6B7280' }}>
                       {s.imd_band}

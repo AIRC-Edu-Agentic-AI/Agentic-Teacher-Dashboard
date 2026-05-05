@@ -62,9 +62,9 @@ export type Tier = 1 | 2 | 3
 export interface AssessmentRecord {
   id_assessment: number
   assessment_type: string
-  date_due: number
-  weight: number
-  score: number | null        // null = not submitted
+  date_due: number | null
+  weight: number | null
+  score: number | null
   date_submitted: number | null
 }
 
@@ -83,7 +83,7 @@ export interface StudentProfile {
   date_unregistration: number | null
   // Time-series arrays indexed 0 = week 1
   weekly_clicks: number[]
-  cumulative_clicks: number[]
+  decayed_engagement: number[]
   assessments: AssessmentRecord[]
   risk_by_week: number[]
   tier_by_week: Tier[]
@@ -92,7 +92,6 @@ export interface StudentProfile {
 export interface CourseIndex {
   module: string
   presentation: string
-  course_length_days: number
   num_weeks: number
   student_count: number
 }
@@ -104,10 +103,9 @@ export interface OuladIndex {
 export interface ProcessedCourse {
   module: string
   presentation: string
-  course_length_days: number
   num_weeks: number
   students: StudentProfile[]
-  cohort_p75_clicks: number[]   // cumulative P75 per week, for normalization
+  cohort_p75_decayed: number[]
 }
 
 // ─── Chat / Agent ─────────────────────────────────────────────────────────────

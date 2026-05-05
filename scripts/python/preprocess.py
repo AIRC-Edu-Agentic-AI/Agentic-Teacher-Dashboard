@@ -1,308 +1,329 @@
 """
-OULAD Preprocessing Script
-===========================
-Reads the 7 OULAD CSV files from public/data/oulad/
-Computes per-student per-week risk scores
-Writes JSON files to public/processed/
+OULAD Preprocessing Script — Vectorised & Parallel
+===================================================
+All CSVs are loaded into DataFrames upfront. Aggregation uses pandas groupby
+and numpy matrix operations. Each course is processed by a worker from a
+ProcessPoolExecutor so all courses run concurrently.
 
-Memory strategy
----------------
-- Small files (courses, studentInfo, registrations, assessments): read fully
-- Large files (studentVle, studentAssessment): read in chunks of 100k rows
-
-Risk formula
-------------
-risk = 1 - (0.45 * assessment_performance + 0.35 * vle_engagement + 0.20 * submission_rate)
-
-    assessment_performance = weighted score across all assessments due by that week
-    vle_engagement         = cumulative clicks / cohort P75 cumulative clicks (clamped to 1)
-    submission_rate        = fraction of due assessments that were submitted
-
-Tier thresholds
----------------
-Tier 1 (low risk)  : risk < 0.33
-Tier 2 (moderate)  : 0.33 <= risk < 0.66
-Tier 3 (high risk) : risk >= 0.66
-
-Usage
------
+Usage:
     python scripts/python/preprocess.py
-
-Output
-------
-    public/processed/index.json
-    public/processed/<MODULE>_<PRESENTATION>.json   (one per course)
 """
+
+from __future__ import annotations
 
 import json
 import math
 import os
 import sys
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
-from typing import Any
 
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-# ── Paths ─────────────────────────────────────────────────────────────────────
-
-ROOT = Path(__file__).resolve().parents[2]
+ROOT    = Path(__file__).resolve().parents[2]
 CSV_DIR = ROOT / "public" / "data" / "oulad"
 OUT_DIR = ROOT / "public" / "processed"
 
-CHUNK_SIZE = 100_000  # rows per chunk for large files
+DECAY_LAMBDA = 0.15
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def csv(name: str) -> Path:
+def csv_path(name: str) -> Path:
     p = CSV_DIR / name
     if not p.exists():
-        sys.exit(
-            f"\n❌  Missing: {p}"
-            f"\n    Place all 7 OULAD CSV files in:  {CSV_DIR}\n"
-        )
+        sys.exit(f"\n❌ Missing: {p}\nPlace all 7 OULAD CSV files in: {CSV_DIR}\n")
     return p
 
 
-def load_small(name: str) -> pd.DataFrame:
-    print(f"  Loading {name}…", flush=True)
-    return pd.read_csv(csv(name))
+def build_decay_matrix(n: int) -> np.ndarray:
+    """Lower-triangular (n×n) weight matrix: W[t,τ] = exp(-λ(t-τ)) for τ≤t."""
+    t = np.arange(n, dtype=np.float32)
+    return np.tril(np.exp(-DECAY_LAMBDA * (t[:, None] - t[None, :])))
 
 
-def compute_risk(
-    week_idx: int,
-    cum_clicks: np.ndarray,
-    p75_cum_clicks: np.ndarray,
-    assessments_due: pd.DataFrame,  # rows: weight, score (NaN = not submitted)
-) -> tuple[float, int]:
-    """Return (risk_score, tier) for a student at a given week (0-indexed)."""
+# ── Per-course worker (runs in subprocess) ───────────────────────────────────
 
-    # 1. VLE engagement
-    clicks = float(cum_clicks[week_idx]) if week_idx < len(cum_clicks) else 0.0
-    p75 = float(p75_cum_clicks[week_idx]) if week_idx < len(p75_cum_clicks) else 1.0
-    engagement = min(1.0, clicks / max(p75, 1.0))
-
-    # 2. Assessment performance + submission rate
-    if assessments_due.empty:
-        assessment_perf = 0.5
-        submission_rate = 0.5
-    else:
-        submitted = assessments_due.dropna(subset=["score"])
-        total_weight = assessments_due["weight"].sum()
-        weighted_score = (submitted["score"] / 100.0 * submitted["weight"]).sum()
-        assessment_perf = float(weighted_score / total_weight) if total_weight > 0 else 0.0
-        submission_rate = len(submitted) / len(assessments_due)
-
-    risk = 1.0 - (0.45 * assessment_perf + 0.35 * engagement + 0.20 * submission_rate)
-    risk = round(max(0.0, min(1.0, risk)), 4)
-    tier = 1 if risk < 0.33 else (2 if risk < 0.66 else 3)
-    return risk, tier
-
-
-def safe(val: Any) -> Any:
-    """Convert NaN / numpy types to JSON-serialisable Python types."""
-    if isinstance(val, float) and math.isnan(val):
-        return None
-    if isinstance(val, (np.integer,)):
-        return int(val)
-    if isinstance(val, (np.floating,)):
-        return float(val)
-    return val
-
-
-# ── Load small tables ─────────────────────────────────────────────────────────
-
-print("\n🔄  Loading OULAD tables…")
-courses_df      = load_small("courses.csv")
-info_df         = load_small("studentInfo.csv")
-reg_df          = load_small("studentRegistration.csv")
-assessments_df  = load_small("assessments.csv")
-assessments_df["date"] = pd.to_numeric(assessments_df["date"], errors="coerce")
-
-# ── Stream studentAssessment.csv ──────────────────────────────────────────────
-# Key: id_student  →  { id_assessment → (score, date_submitted) }
-
-print("  Streaming studentAssessment.csv…", flush=True)
-score_map: dict[int, dict[int, tuple[float | None, int | None]]] = {}
-
-for chunk in pd.read_csv(csv("studentAssessment.csv"), chunksize=CHUNK_SIZE):
-    for _, row in chunk.iterrows():
-        sid = int(row["id_student"])
-        aid = int(row["id_assessment"])
-        score = None if (pd.isna(row["score"]) or str(row["score"]).strip() == "?") else float(row["score"])
-        date_sub = None if pd.isna(row["date_submitted"]) else int(row["date_submitted"])
-        score_map.setdefault(sid, {})[aid] = (score, date_sub)
-
-print(f"    → {len(score_map):,} students with assessment records")
-
-# ── Stream studentVle.csv ─────────────────────────────────────────────────────
-# Aggregate into: (code_module, code_presentation, id_student, week_number) → sum_click
-
-print("  Streaming studentVle.csv (this is the large one)…", flush=True)
-# weekly_clicks[(mod, pres, sid, week)] = total clicks that week
-weekly_clicks: dict[tuple[str, str, int, int], int] = {}
-
-chunks = pd.read_csv(csv("studentVle.csv"), chunksize=CHUNK_SIZE)
-for chunk in tqdm(chunks, desc="  VLE chunks", unit="chunk", leave=False):
-    # Drop pre-course rows (negative date values)
-    chunk = chunk[chunk["date"] > 0]
-    chunk = chunk.copy()
-    chunk["week"] = ((chunk["date"] - 1) // 7).astype(int)
-
-    grouped = (
-        chunk.groupby(["code_module", "code_presentation", "id_student", "week"])["sum_click"]
-        .sum()
-    )
-    for (mod, pres, sid, week), clicks in grouped.items():
-        key = (str(mod), str(pres), int(sid), int(week))
-        weekly_clicks[key] = weekly_clicks.get(key, 0) + int(clicks)
-
-print(f"    → {len(weekly_clicks):,} (student × week) VLE records aggregated")
-
-# ── Process each course ───────────────────────────────────────────────────────
-
-OUT_DIR.mkdir(parents=True, exist_ok=True)
-index_courses = []
-
-print(f"\n⚙️   Processing {len(courses_df)} course presentations…\n")
-
-for _, course_row in courses_df.iterrows():
-    mod  = str(course_row["code_module"])
-    pres = str(course_row["code_presentation"])
-    length_days = int(course_row["module_presentation_length"])
-    num_weeks = math.ceil(length_days / 7)
+def process_course(bundle: dict) -> tuple[str, dict | None]:
+    mod = bundle["mod"]
+    pres = bundle["pres"]
+    T = bundle["num_weeks"]
     key = f"{mod}_{pres}"
 
-    # Students for this presentation
-    students = info_df[
-        (info_df["code_module"] == mod) & (info_df["code_presentation"] == pres)
-    ].copy()
+    students_df    = pd.DataFrame(bundle["students"])
+    regs_df        = pd.DataFrame(bundle["regs"])
+    assess_meta_df = pd.DataFrame(bundle["assess_meta"])
+    vle_df         = pd.DataFrame(bundle["vle"])     # id_student, week, clicks
+    scores_df      = pd.DataFrame(bundle["scores"])  # id_student, id_assessment, score, date_submitted
 
-    if students.empty:
-        print(f"  ⚠  {key}: no students — skipping")
-        continue
+    if students_df.empty:
+        return key, None
 
-    # Registrations
-    regs = reg_df[
-        (reg_df["code_module"] == mod) & (reg_df["code_presentation"] == pres)
-    ].set_index("id_student")
+    student_ids = students_df["id_student"].to_numpy(dtype=np.int64)
+    S = len(student_ids)
+    sid_idx: dict[int, int] = {int(s): i for i, s in enumerate(student_ids)}
 
-    # Assessments for this presentation
-    pres_assessments = assessments_df[
-        (assessments_df["code_module"] == mod) & (assessments_df["code_presentation"] == pres)
-    ].copy()
+    # ── Weekly clicks matrix (S × T) via numpy scatter-add ───────────────────
+    clicks_mat = np.zeros((S, T), dtype=np.float32)
+    if not vle_df.empty:
+        v = vle_df.copy()
+        v["sidx"] = v["id_student"].map(sid_idx)
+        v = v.dropna(subset=["sidx"])
+        v["sidx"] = v["sidx"].astype(np.int32)
+        v = v[(v["week"] >= 0) & (v["week"] < T)]
+        np.add.at(
+            clicks_mat,
+            (v["sidx"].to_numpy(), v["week"].to_numpy(dtype=np.int32)),
+            v["clicks"].to_numpy(dtype=np.float32),
+        )
 
-    # Build per-student weekly clicks arrays (num_weeks long)
-    student_ids = students["id_student"].tolist()
+    # ── Decayed engagement (S × T) = clicks_mat @ W.T ────────────────────────
+    decayed_mat = clicks_mat @ build_decay_matrix(T).T   # (S × T)
 
-    # weekly_arr[sid][week] = clicks
-    weekly_arr: dict[int, np.ndarray] = {}
-    for sid in student_ids:
-        arr = np.zeros(num_weeks, dtype=np.int32)
-        for w in range(num_weeks):
-            arr[w] = weekly_clicks.get((mod, pres, sid, w), 0)
-        weekly_arr[sid] = arr
+    # ── Cohort P75 per week ───────────────────────────────────────────────────
+    p75 = np.maximum(np.percentile(decayed_mat, 75, axis=0), 5.0)   # (T,)
 
-    # Cumulative clicks per student
-    cum_arr: dict[int, np.ndarray] = {
-        sid: np.cumsum(weekly_arr[sid]) for sid in student_ids
-    }
+    # ── Registration active mask (S × T) ─────────────────────────────────────
+    reg_day   = np.zeros(S, dtype=np.float32)
+    unreg_day = np.full(S, np.inf, dtype=np.float32)
 
-    # Cohort P75 cumulative clicks at each week
-    all_cum = np.stack([cum_arr[sid] for sid in student_ids])  # shape (n_students, n_weeks)
-    p75_cum = np.percentile(all_cum, 75, axis=0)               # shape (n_weeks,)
+    if not regs_df.empty:
+        regs_idx = regs_df.set_index("id_student")
+        for i, sid in enumerate(student_ids):
+            if sid in regs_idx.index:
+                row = regs_idx.loc[sid]
+                rd, ud = row["date_registration"], row["date_unregistration"]
+                if not pd.isna(rd):
+                    reg_day[i] = float(rd)
+                if not pd.isna(ud):
+                    unreg_day[i] = float(ud)
 
-    # Build output students list
+    current_days = (np.arange(T, dtype=np.float32) + 1) * 7   # (T,)
+    active = (                                                   # (S × T) bool
+        (reg_day[:, None]   <= current_days[None, :]) &
+        (unreg_day[:, None] >= current_days[None, :])
+    )
+
+    # ── Assessment matrices (S × A) ───────────────────────────────────────────
+    A = len(assess_meta_df)
+    has_assess = A > 0
+
+    if has_assess:
+        aid_arr      = assess_meta_df["id_assessment"].to_numpy(dtype=np.int64)
+        date_nan     = assess_meta_df["date"].isna().to_numpy()
+        weight_nan   = assess_meta_df["weight"].isna().to_numpy()
+        date_due     = np.where(date_nan,   np.inf, assess_meta_df["date"].to_numpy(dtype=np.float32))
+        weight_vec   = np.where(weight_nan, 0.0,    assess_meta_df["weight"].to_numpy(dtype=np.float32))
+        assess_types = assess_meta_df["assessment_type"].tolist()
+        aid_idx: dict[int, int] = {int(a): j for j, a in enumerate(aid_arr)}
+
+        score_mat   = np.full((S, A), np.nan, dtype=np.float32)
+        sub_day_mat = np.full((S, A), np.nan, dtype=np.float32)
+
+        if not scores_df.empty:
+            sc = scores_df.copy()
+            sc["sidx"] = sc["id_student"].map(sid_idx)
+            sc["aidx"] = sc["id_assessment"].map(aid_idx)
+            sc = sc.dropna(subset=["sidx", "aidx"])
+            sc["sidx"] = sc["sidx"].astype(np.int32)
+            sc["aidx"] = sc["aidx"].astype(np.int32)
+
+            has_sc = ~sc["score"].isna()
+            score_mat[
+                sc.loc[has_sc, "sidx"].to_numpy(),
+                sc.loc[has_sc, "aidx"].to_numpy(),
+            ] = sc.loc[has_sc, "score"].to_numpy(dtype=np.float32)
+
+            has_ds = ~sc["date_submitted"].isna()
+            sub_day_mat[
+                sc.loc[has_ds, "sidx"].to_numpy(),
+                sc.loc[has_ds, "aidx"].to_numpy(),
+            ] = sc.loc[has_ds, "date_submitted"].to_numpy(dtype=np.float32)
+
+    # ── Vectorised risk & tier (S × T) ───────────────────────────────────────
+    risk_mat = np.full((S, T), np.nan, dtype=np.float32)
+    tier_mat = np.full((S, T), np.nan, dtype=np.float32)
+
+    for w in range(T):
+        active_w = active[:, w]
+        if not active_w.any():
+            continue
+
+        engagement = np.minimum(1.0, decayed_mat[:, w] / float(p75[w]))  # (S,)
+
+        if has_assess:
+            due_j = date_due <= current_days[w]   # (A,) bool
+            n_due = int(due_j.sum())
+        else:
+            n_due = 0
+
+        if n_due > 0:
+            dw       = weight_vec * due_j          # (A,) — zero for non-due
+            total_dw = float(dw.sum())
+
+            ontime     = (~np.isnan(sub_day_mat)) & (sub_day_mat <= current_days[w])
+            due_ontime = ontime & due_j[None, :]   # (S × A)
+
+            a_perf   = (np.where(due_ontime, score_mat / 100.0, 0.0) * dw[None, :]).sum(axis=1) / max(total_dw, 1e-9)
+            sub_rate = due_ontime.sum(axis=1) / n_due
+        else:
+            a_perf   = np.zeros(S, dtype=np.float32)
+            sub_rate = np.zeros(S, dtype=np.float32)
+
+        risk_w = np.round(
+            np.clip(1.0 - (0.45 * a_perf + 0.35 * engagement + 0.20 * sub_rate), 0.0, 1.0), 4
+        )
+        tier_w = np.where(risk_w < 0.33, 1, np.where(risk_w < 0.66, 2, 3))
+
+        risk_mat[active_w, w] = risk_w[active_w]
+        tier_mat[active_w, w] = tier_w[active_w]
+
+    # ── Serialise student records ─────────────────────────────────────────────
+    reg_day_out   = reg_day.astype(np.int32)
+    unreg_day_out = np.where(np.isinf(unreg_day), -1, unreg_day.astype(np.int32))
+
     processed_students = []
+    for i, srow in enumerate(students_df.itertuples(index=False)):
+        student_assessments = []
+        if has_assess:
+            for j in range(A):
+                student_assessments.append({
+                    "id_assessment":   int(aid_arr[j]),
+                    "assessment_type": assess_types[j],
+                    "date_due":        None if date_nan[j]   else int(date_due[j]),
+                    "weight":          None if weight_nan[j] else float(weight_vec[j]),
+                    "score":           None if np.isnan(score_mat[i, j])   else round(float(score_mat[i, j]),   2),
+                    "date_submitted":  None if np.isnan(sub_day_mat[i, j]) else int(sub_day_mat[i, j]),
+                })
 
-    for _, s_row in tqdm(students.iterrows(), total=len(students), desc=f"  {key}", leave=False):
-        sid = int(s_row["id_student"])
-
-        reg_row = regs.loc[sid] if sid in regs.index else None
-        date_reg   = int(reg_row["date_registration"])   if reg_row is not None and not pd.isna(reg_row["date_registration"]) and str(reg_row["date_registration"]).strip() != "?"  else 0
-        date_unreg = int(reg_row["date_unregistration"]) if reg_row is not None and not pd.isna(reg_row["date_unregistration"]) and str(reg_row["date_unregistration"]).strip() != "?" else None
-
-        # Assessment records for this student
-        s_score_map = score_map.get(sid, {})
-        assessment_records = []
-        for _, a_row in pres_assessments.iterrows():
-            aid = int(a_row["id_assessment"])
-            score, date_sub = s_score_map.get(aid, (None, None))
-            assessment_records.append({
-                "id_assessment": aid,
-                "assessment_type": str(a_row["assessment_type"]),
-                "date_due": int(a_row["date"]) if pd.notna(a_row["date"]) else None,
-                "weight": float(a_row["weight"]),
-                "score": score,
-                "date_submitted": date_sub,
-            })
-
-        cum = cum_arr[sid]
-
-        # Risk + tier per week
-        risk_by_week = []
-        tier_by_week = []
-        for w in range(num_weeks):
-            day_threshold = (w + 1) * 7
-            due_now = pres_assessments[pres_assessments["date"] <= day_threshold].copy()
-            if not due_now.empty:
-                due_now = due_now.copy()
-                scores_list = [s_score_map.get(int(a), (None, None))[0] for a in due_now["id_assessment"]]
-                due_now["score"] = scores_list
-            risk, tier = compute_risk(w, cum, p75_cum, due_now)
-            risk_by_week.append(risk)
-            tier_by_week.append(tier)
-
+        ud = int(unreg_day_out[i])
         processed_students.append({
-            "id_student": sid,
-            "gender": safe(s_row.get("gender")),
-            "region": safe(s_row.get("region")),
-            "highest_education": safe(s_row.get("highest_education")),
-            "imd_band": safe(s_row.get("imd_band")),
-            "age_band": safe(s_row.get("age_band")),
-            "num_of_prev_attempts": safe(s_row.get("num_of_prev_attempts")),
-            "studied_credits": safe(s_row.get("studied_credits")),
-            "disability": str(s_row.get("disability", "N")).strip().upper() == "Y",
-            "final_result": safe(s_row.get("final_result")),
-            "date_registration": date_reg,
-            "date_unregistration": date_unreg,
-            "weekly_clicks": weekly_arr[sid].tolist(),
-            "cumulative_clicks": cum.tolist(),
-            "assessments": assessment_records,
-            "risk_by_week": risk_by_week,
-            "tier_by_week": tier_by_week,
+            "id_student":           int(srow.id_student),
+            "gender":               str(srow.gender),
+            "region":               str(srow.region),
+            "highest_education":    str(srow.highest_education),
+            "imd_band":             None if pd.isna(srow.imd_band) else str(srow.imd_band),
+            "age_band":             str(srow.age_band),
+            "num_of_prev_attempts": int(srow.num_of_prev_attempts),
+            "studied_credits":      int(srow.studied_credits),
+            "disability":           str(srow.disability) == "Y",
+            "final_result":         str(srow.final_result),
+            "date_registration":    int(reg_day_out[i]),
+            "date_unregistration":  None if ud == -1 else ud,
+            "assessments":          student_assessments,
+            "weekly_clicks":        [int(v) for v in clicks_mat[i]],
+            "decayed_engagement":   [round(float(v), 4) for v in decayed_mat[i]],
+            "risk_by_week":         [None if math.isnan(float(v)) else round(float(v), 4) for v in risk_mat[i]],
+            "tier_by_week":         [None if math.isnan(float(v)) else int(v) for v in tier_mat[i]],
         })
 
-    output = {
-        "module": mod,
-        "presentation": pres,
-        "course_length_days": length_days,
-        "num_weeks": num_weeks,
-        "cohort_p75_clicks": p75_cum.tolist(),
-        "students": processed_students,
+    return key, {
+        "module":             mod,
+        "presentation":       pres,
+        "num_weeks":          T,
+        "cohort_p75_decayed": [round(float(v), 4) for v in p75],
+        "students":           processed_students,
     }
 
-    out_path = OUT_DIR / f"{key}.json"
-    with open(out_path, "w", encoding="utf-8") as f:
-        json.dump(output, f, separators=(",", ":"))  # compact — no pretty-print
 
-    print(f"  ✓  {key}: {len(processed_students):,} students → {out_path.name}")
+# ── Main ──────────────────────────────────────────────────────────────────────
 
-    index_courses.append({
-        "module": mod,
-        "presentation": pres,
-        "course_length_days": length_days,
-        "num_weeks": num_weeks,
-        "student_count": len(processed_students),
-    })
+if __name__ == "__main__":
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
 
-# ── Write index ───────────────────────────────────────────────────────────────
+    # Load all CSV tables
+    print("\n🔄 Loading OULAD tables…")
+    for name in ("courses.csv", "studentInfo.csv", "studentRegistration.csv",
+                 "assessments.csv", "studentAssessment.csv", "studentVle.csv"):
+        csv_path(name)   # fail fast if any file is missing
 
-index_path = OUT_DIR / "index.json"
-with open(index_path, "w", encoding="utf-8") as f:
-    json.dump({"courses": index_courses}, f, indent=2)
+    courses_df  = pd.read_csv(csv_path("courses.csv"))
+    info_df     = pd.read_csv(csv_path("studentInfo.csv"))
+    reg_df      = pd.read_csv(csv_path("studentRegistration.csv"))
+    assess_df   = pd.read_csv(csv_path("assessments.csv"))
+    stu_ass_df  = pd.read_csv(csv_path("studentAssessment.csv"))
 
-print(f"\n✅  Done — {len(index_courses)} courses written to {OUT_DIR}")
-print("    Run: npm run dev\n")
+    # VLE: single vectorised groupby (replaces chunk streaming loop)
+    print("  Aggregating studentVle.csv…", flush=True)
+    vle_raw = pd.read_csv(csv_path("studentVle.csv"))
+    vle_raw = vle_raw[vle_raw["date"] > 0].copy()
+    vle_raw["week"] = ((vle_raw["date"] - 1) // 7).astype(np.int32)
+    vle_weekly = (
+        vle_raw
+        .groupby(["code_module", "code_presentation", "id_student", "week"], sort=False)["sum_click"]
+        .sum()
+        .reset_index()
+        .rename(columns={"sum_click": "clicks"})
+    )
+    del vle_raw
+    print(f"    → {len(vle_weekly):,} weekly VLE records")
+
+    # Build per-course bundles (pre-filtered slices → cheap to pickle)
+    print(f"\n⚙️  Building {len(courses_df)} course bundles…")
+    bundles: list[dict] = []
+
+    for _, crow in courses_df.iterrows():
+        mod  = str(crow["code_module"])
+        pres = str(crow["code_presentation"])
+        T    = math.ceil(int(crow["module_presentation_length"]) / 7)
+
+        stu = info_df[(info_df["code_module"] == mod) & (info_df["code_presentation"] == pres)]
+        if stu.empty:
+            continue
+
+        sids  = set(stu["id_student"].tolist())
+        ameta = assess_df[(assess_df["code_module"] == mod) & (assess_df["code_presentation"] == pres)]
+        aids  = set(ameta["id_assessment"].tolist())
+
+        bundles.append({
+            "mod":         mod,
+            "pres":        pres,
+            "num_weeks":   T,
+            "students":    stu.to_dict("records"),
+            "regs":        reg_df[
+                               (reg_df["code_module"] == mod) &
+                               (reg_df["code_presentation"] == pres)
+                           ][["id_student", "date_registration", "date_unregistration"]].to_dict("records"),
+            "assess_meta": ameta.to_dict("records"),
+            "vle":         vle_weekly[
+                               (vle_weekly["code_module"] == mod) &
+                               (vle_weekly["code_presentation"] == pres)
+                           ][["id_student", "week", "clicks"]].to_dict("records"),
+            "scores":      stu_ass_df[
+                               stu_ass_df["id_student"].isin(sids) &
+                               stu_ass_df["id_assessment"].isin(aids)
+                           ][["id_student", "id_assessment", "score", "date_submitted"]].to_dict("records"),
+        })
+
+    # Process all courses in parallel
+    n_workers = max(1, min(len(bundles), os.cpu_count() or 1))
+    print(f"\n🚀 Processing {len(bundles)} courses across {n_workers} workers…\n")
+
+    index_courses: list[dict] = []
+
+    with ProcessPoolExecutor(max_workers=n_workers) as pool:
+        futures = {pool.submit(process_course, b): f"{b['mod']}_{b['pres']}" for b in bundles}
+        for future in tqdm(as_completed(futures), total=len(futures), desc="Courses"):
+            course_key, output = future.result()
+            if output is None:
+                continue
+
+            out_path = OUT_DIR / f"{course_key}.json"
+            with open(out_path, "w", encoding="utf-8") as f:
+                json.dump(output, f, separators=(",", ":"))
+
+            n_stu = len(output["students"])
+            tqdm.write(f"  ✓ {course_key}: {n_stu} students")
+            index_courses.append({
+                "module":        output["module"],
+                "presentation":  output["presentation"],
+                "num_weeks":     output["num_weeks"],
+                "student_count": n_stu,
+            })
+
+    with open(OUT_DIR / "index.json", "w", encoding="utf-8") as f:
+        json.dump({"courses": index_courses}, f, indent=2)
+
+    print(f"\n✅ Done. Output in {OUT_DIR}")
