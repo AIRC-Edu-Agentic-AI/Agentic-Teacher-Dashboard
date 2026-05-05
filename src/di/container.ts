@@ -7,7 +7,7 @@
  *   Deploy   → ApiDataAdapter + ClaudeAgentAdapter (same)
  */
 
-import { ProcessedDataAdapter } from '../adapters/ProcessedDataAdapter'
+import { MongoDataAdapter } from '../adapters/MongoDataAdapter'
 import { MockMasteryAdapter } from '../adapters/MockMasteryAdapter'
 import { ClaudeAgentAdapter } from '../adapters/ClaudeAgentAdapter'
 
@@ -20,7 +20,7 @@ export const container: {
   agentService: AgentService
   masteryService: MasteryService
 } = {
-  dataService: new ProcessedDataAdapter(),
+  dataService: new MongoDataAdapter(),
   agentService: new ClaudeAgentAdapter(),
   masteryService: new MockMasteryAdapter(),
 }
