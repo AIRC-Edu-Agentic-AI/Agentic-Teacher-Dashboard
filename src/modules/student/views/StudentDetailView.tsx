@@ -3,7 +3,7 @@ import {
   Box, Typography, Card, CardContent, Chip, Button, Grid,
   Table, TableBody, TableCell, TableHead, TableRow, Toolbar, CircularProgress,
 } from '@mui/material'
-import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts'
+import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts'
 import { useQuery } from '@tanstack/react-query'
 import ChatIcon from '@mui/icons-material/ChatBubbleOutlineRounded'
 import HubIcon from '@mui/icons-material/HubRounded'
@@ -47,8 +47,28 @@ export function StudentDetailView() {
   const tier = (student.tier_by_week[weekIdx] ?? 1) as Tier
   const tc = TIER_COLORS[tier]
 
+  // Cumulative weighted score per week:
+  //   CWS(w) = Σ(score × weight for on-time submissions due by w) / Σ(weight for all due by w) × 100
+  const cwsByWeek = student.risk_by_week.map((_, i) => {
+    const currentDay = (i + 1) * 7
+    const due = (student.assessments ?? []).filter(
+      (a) => a.date_due != null && a.date_due <= currentDay,
+    )
+    if (due.length === 0) return null
+    const totalWeight = due.reduce((s, a) => s + (a.weight ?? 0), 0)
+    if (totalWeight === 0) return null
+    const weightedScore = due
+      .filter((a) => a.date_submitted != null && a.date_submitted <= currentDay)
+      .reduce((s, a) => s + (a.score ?? 0) * (a.weight ?? 0), 0)
+    return Math.round((weightedScore / totalWeight) * 10) / 10
+  })
+
   // Risk timeline data
-  const riskData = student.risk_by_week.map((r, i) => ({ week: i + 1, risk: r, tier: student.tier_by_week[i] }))
+  const riskData = student.risk_by_week.map((r, i) => ({
+    week: i + 1,
+    risk: r,
+    cws: cwsByWeek[i],
+  }))
 
   // Weekly VLE bar data (sample every 2 weeks for readability)
   const vleData = student.weekly_clicks.map((c, i) => ({ week: i + 1, clicks: c }))
@@ -68,9 +88,18 @@ export function StudentDetailView() {
         <Button startIcon={<ArrowBackIcon />} onClick={() => navigate('/')} size="small" sx={{ color: '#6B7280', fontSize: 12 }}>
           Overview
         </Button>
-        <Typography sx={{ fontSize: 14, fontWeight: 500, color: '#0A1628', fontFamily: '"IBM Plex Sans", sans-serif', flex: 1 }}>
-          Student #{student.id_student} — {selectedModule} {selectedPresentation}
-        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flex: 1 }}>
+          <Typography sx={{ fontSize: 14, fontWeight: 500, color: '#0A1628', fontFamily: '"IBM Plex Sans", sans-serif' }}>
+            Student #{student.id_student} — {selectedModule} {selectedPresentation}
+          </Typography>
+          {student.final_result === 'Withdrawn' && (
+            <Chip
+              label="Withdrawn"
+              size="small"
+              sx={{ bgcolor: '#F3F4F6', color: '#6B7280', fontFamily: '"IBM Plex Mono", monospace', fontWeight: 500, fontSize: 12 }}
+            />
+          )}
+        </Box>
         <Button variant="outlined" size="small" startIcon={<HubIcon />} onClick={() => navigate('/mastery')} sx={{ fontSize: 12, borderColor: '#E5E3DC', color: '#6B7280' }}>
           Mastery graph
         </Button>
@@ -123,18 +152,36 @@ export function StudentDetailView() {
                     </Typography>
                   </Box>
                   <Chip label={`Tier ${tier}`} sx={{ bgcolor: tc.bg, color: tc.text, fontFamily: '"IBM Plex Mono", monospace', fontWeight: 500, fontSize: 13 }} />
+                  {student.final_result === 'Withdrawn' && (
+                    <Chip label="Withdrawn" sx={{ bgcolor: '#F3F4F6', color: '#6B7280', fontFamily: '"IBM Plex Mono", monospace', fontWeight: 500, fontSize: 13 }} />
+                  )}
                 </Box>
-                <Typography sx={{ fontSize: 12, fontWeight: 500, color: '#0A1628', mb: 1 }}>Risk trajectory</Typography>
-                <ResponsiveContainer width="100%" height={160}>
-                  <LineChart data={riskData} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
+                <Typography sx={{ fontSize: 12, fontWeight: 500, color: '#0A1628', mb: 1 }}>Risk trajectory &amp; weighted score</Typography>
+                <ResponsiveContainer width="100%" height={180}>
+                  <LineChart data={riskData} margin={{ top: 4, right: 36, left: -20, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#F0EFE9" />
                     <XAxis dataKey="week" tick={{ fontSize: 10, fontFamily: '"IBM Plex Mono"' }} />
-                    <YAxis domain={[0, 1]} tick={{ fontSize: 10, fontFamily: '"IBM Plex Mono"' }} />
-                    <Tooltip formatter={(v: number) => `${(v * 100).toFixed(0)}%`} labelFormatter={(v) => `Week ${v}`} contentStyle={{ fontSize: 12, fontFamily: '"IBM Plex Mono"', borderRadius: 8 }} />
-                    <ReferenceLine y={0.33} stroke="#1D9E75" strokeDasharray="3 3" />
-                    <ReferenceLine y={0.66} stroke="#EF9F27" strokeDasharray="3 3" />
-                    <ReferenceLine x={currentWeek} stroke="#0A1628" strokeDasharray="4 3" strokeWidth={1.5} />
-                    <Line type="monotone" dataKey="risk" stroke="#0A1628" strokeWidth={2} dot={false} />
+                    <YAxis yAxisId="left" domain={[0, 1]} tick={{ fontSize: 10, fontFamily: '"IBM Plex Mono"' }} />
+                    <YAxis yAxisId="right" orientation="right" domain={[0, 100]} tick={{ fontSize: 10, fontFamily: '"IBM Plex Mono"' }} tickFormatter={(v) => `${v}%`} />
+                    <Tooltip
+                      formatter={(value: number, name: string) =>
+                        name === 'risk'
+                          ? [`${(value * 100).toFixed(0)}%`, 'Risk']
+                          : [`${value.toFixed(1)}%`, 'Weighted score']
+                      }
+                      labelFormatter={(v) => `Week ${v}`}
+                      contentStyle={{ fontSize: 12, fontFamily: '"IBM Plex Mono"', borderRadius: 8 }}
+                    />
+                    <Legend
+                      iconType="plainline"
+                      formatter={(v) => v === 'risk' ? 'Risk' : 'Weighted score'}
+                      wrapperStyle={{ fontSize: 11, fontFamily: '"IBM Plex Mono", monospace' }}
+                    />
+                    <ReferenceLine yAxisId="left" y={0.33} stroke="#1D9E75" strokeDasharray="3 3" />
+                    <ReferenceLine yAxisId="left" y={0.66} stroke="#EF9F27" strokeDasharray="3 3" />
+                    <ReferenceLine yAxisId="left" x={currentWeek} stroke="#0A1628" strokeDasharray="4 3" strokeWidth={1.5} />
+                    <Line yAxisId="left" type="monotone" dataKey="risk" stroke="#0A1628" strokeWidth={2} dot={false} />
+                    <Line yAxisId="right" type="stepAfter" dataKey="cws" stroke="#6366F1" strokeWidth={2} dot={false} connectNulls={false} strokeDasharray="5 3" />
                   </LineChart>
                 </ResponsiveContainer>
               </CardContent>
