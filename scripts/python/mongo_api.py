@@ -12,7 +12,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-client = MongoClient("mongodb://localhost:27017/")
+client = MongoClient("mongodb+srv://whitedevil0981907116_db_user:airc@ouladcluster.tsrzoux.mongodb.net/?appName=OuladCluster")
 db = client["oulad_db"]
 
 def compute_weekly_clicks(vle_docs, course_length_days):

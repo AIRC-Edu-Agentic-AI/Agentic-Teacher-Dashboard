@@ -1,0 +1,158 @@
+{
+  "courses": [
+    {
+      "module": "AAA",
+      "presentation": "2013J",
+      "course_length_days": 268,
+      "num_weeks": 39,
+      "student_count": 383
+    },
+    {
+      "module": "AAA",
+      "presentation": "2014J",
+      "course_length_days": 269,
+      "num_weeks": 39,
+      "student_count": 365
+    },
+    {
+      "module": "BBB",
+      "presentation": "2013J",
+      "course_length_days": 268,
+      "num_weeks": 39,
+      "student_count": 2237
+    },
+    {
+      "module": "BBB",
+      "presentation": "2014J",
+      "course_length_days": 262,
+      "num_weeks": 38,
+      "student_count": 2292
+    },
+    {
+      "module": "BBB",
+      "presentation": "2013B",
+      "course_length_days": 240,
+      "num_weeks": 35,
+      "student_count": 1767
+    },
+    {
+      "module": "BBB",
+      "presentation": "2014B",
+      "course_length_days": 234,
+      "num_weeks": 34,
+      "student_count": 1613
+    },
+    {
+      "module": "CCC",
+      "presentation": "2014J",
+      "course_length_days": 269,
+      "num_weeks": 39,
+      "student_count": 2498
+    },
+    {
+      "module": "CCC",
+      "presentation": "2014B",
+      "course_length_days": 241,
+      "num_weeks": 35,
+      "student_count": 1936
+    },
+    {
+      "module": "DDD",
+      "presentation": "2013J",
+      "course_length_days": 261,
+      "num_weeks": 38,
+      "student_count": 1938
+    },
+    {
+      "module": "DDD",
+      "presentation": "2014J",
+      "course_length_days": 262,
+      "num_weeks": 38,
+      "student_count": 1803
+    },
+    {
+      "module": "DDD",
+      "presentation": "2013B",
+      "course_length_days": 240,
+      "num_weeks": 35,
+      "student_count": 1303
+    },
+    {
+      "module": "DDD",
+      "presentation": "2014B",
+      "course_length_days": 241,
+      "num_weeks": 35,
+      "student_count": 1228
+    },
+    {
+      "module": "EEE",
+      "presentation": "2013J",
+      "course_length_days": 268,
+      "num_weeks": 39,
+      "student_count": 1052
+    },
+    {
+      "module": "EEE",
+      "presentation": "2014J",
+      "course_length_days": 269,
+      "num_weeks": 39,
+      "student_count": 1188
+    },
+    {
+      "module": "EEE",
+      "presentation": "2014B",
+      "course_length_days": 241,
+      "num_weeks": 35,
+      "student_count": 694
+    },
+    {
+      "module": "FFF",
+      "presentation": "2013J",
+      "course_length_days": 268,
+      "num_weeks": 39,
+      "student_count": 2283
+    },
+    {
+      "module": "FFF",
+      "presentation": "2014J",
+      "course_length_days": 269,
+      "num_weeks": 39,
+      "student_count": 2365
+    },
+    {
+      "module": "FFF",
+      "presentation": "2013B",
+      "course_length_days": 240,
+      "num_weeks": 35,
+      "student_count": 1614
+    },
+    {
+      "module": "FFF",
+      "presentation": "2014B",
+      "course_length_days": 241,
+      "num_weeks": 35,
+      "student_count": 1500
+    },
+    {
+      "module": "GGG",
+      "presentation": "2013J",
+      "course_length_days": 261,
+      "num_weeks": 38,
+      "student_count": 952
+    },
+    {
+      "module": "GGG",
+      "presentation": "2014J",
+      "course_length_days": 269,
+      "num_weeks": 39,
+      "student_count": 749
+    },
+    {
+      "module": "GGG",
+      "presentation": "2014B",
+      "course_length_days": 241,
+      "num_weeks": 35,
+      "student_count": 833
+    }
+  ]
+}
