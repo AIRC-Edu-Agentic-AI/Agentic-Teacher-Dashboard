@@ -188,15 +188,19 @@ def process_course(bundle):
 
 
 if __name__ == "__main__":
-    print("\n Loading OULAD tables...")
-    courses_df = pd.read_csv(CSV_DIR / "courses.csv")
-    info_df    = pd.read_csv(CSV_DIR / "studentInfo.csv")
-    reg_df     = pd.read_csv(CSV_DIR / "studentRegistration.csv")
-    assess_df  = pd.read_csv(CSV_DIR / "assessments.csv")
-    stu_ass_df = pd.read_csv(CSV_DIR / "studentAssessment.csv")
+    print("\n Connecting to raw cluster...")
+    raw_client = MongoClient("mongodb+srv://micipssadjaroun_db_user:airc2@ouladcluster2.hvn6kza.mongodb.net/?appName=ouladcluster2")
+    raw_db = raw_client["oulad_db"]
 
-    print("  Aggregating studentVle.csv...")
-    vle_raw = pd.read_csv(CSV_DIR / "studentVle.csv")
+    print(" Loading data from Atlas raw...")
+    courses_df  = pd.DataFrame(list(raw_db["modules"].find({}, {"_id": 0})))
+    info_df     = pd.DataFrame(list(raw_db["students"].find({}, {"_id": 0})))
+    reg_df      = pd.DataFrame(list(raw_db["registrations"].find({}, {"_id": 0})))
+    assess_df   = pd.DataFrame(list(raw_db["assessments_meta"].find({}, {"_id": 0})))
+    stu_ass_df  = pd.DataFrame(list(raw_db["student_assessments"].find({}, {"_id": 0})))
+
+    print("  Aggregating vle_interactions from Atlas...")
+    vle_raw = pd.DataFrame(list(raw_db["vle_interactions"].find({}, {"_id": 0})))
     vle_raw = vle_raw[vle_raw["date"] > 0].copy()
     vle_raw["week"] = ((vle_raw["date"] - 1) // 7).astype(np.int32)
     vle_weekly = (
@@ -207,6 +211,9 @@ if __name__ == "__main__":
         .rename(columns={"sum_click": "clicks"})
     )
     del vle_raw
+
+    # Rename columns to match expected format
+    courses_df = courses_df.rename(columns={"code_module": "code_module", "code_presentation": "code_presentation", "module_presentation_length": "module_presentation_length"})
 
     print(f"\n Building {len(courses_df)} course bundles...")
     bundles = []
@@ -231,15 +238,8 @@ if __name__ == "__main__":
     n_workers = max(1, min(len(bundles), os.cpu_count() or 1))
     print(f"\n Processing {len(bundles)} courses across {n_workers} workers...")
 
-    client = MongoClient(ATLAS_URI)
-    db     = client["oulad_db"]
-    db["processed_courses"].drop()
-
-    n_workers = max(1, min(len(bundles), os.cpu_count() or 1))
-    print(f"\n Processing {len(bundles)} courses across {n_workers} workers...")
-
-    client = MongoClient(ATLAS_URI)
-    db     = client["oulad_db"]
+    processed_client = MongoClient(ATLAS_URI)
+    db = processed_client["oulad_db"]
     db["processed_courses"].drop()
     db["processed_students"].drop()
 
@@ -250,8 +250,6 @@ if __name__ == "__main__":
         for future in tqdm(as_completed(futures), total=len(futures), desc="Courses"):
             course_key, output = future.result()
             if output is None: continue
-
-            # Stocke les infos du cours sans les étudiants
             db["processed_courses"].insert_one({
                 "module":             output["module"],
                 "presentation":       output["presentation"],
@@ -259,16 +257,12 @@ if __name__ == "__main__":
                 "cohort_p75_decayed": output["cohort_p75_decayed"],
                 "student_count":      len(output["students"])
             })
-
-            # Stocke chaque étudiant séparément
             for s in output["students"]:
                 s["code_module"]       = output["module"]
                 s["code_presentation"] = output["presentation"]
                 all_students.append(s)
-
             tqdm.write(f"  {course_key}: {len(output['students'])} students")
 
-    # Insert par batch de 500
     if all_students:
         print(f"\n Inserting {len(all_students)} students...")
         batch_size = 500
@@ -276,7 +270,6 @@ if __name__ == "__main__":
             db["processed_students"].insert_many(all_students[i:i+batch_size])
             print(f"  Inserted {min(i+batch_size, len(all_students))}/{len(all_students)}")
 
-    # Indexes pour accélérer les requêtes
     print(" Creating indexes...")
     db["processed_students"].create_index([("code_module", 1), ("code_presentation", 1)])
     db["processed_students"].create_index([("code_module", 1), ("code_presentation", 1), ("id_student", 1)])
