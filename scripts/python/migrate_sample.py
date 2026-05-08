@@ -1,16 +1,16 @@
 from pymongo import MongoClient
-import random
 
 local = MongoClient("mongodb://localhost:27017/")["oulad_db"]
 atlas = MongoClient("mongodb+srv://micipssadjaroun_db_user:airc2@ouladcluster2.hvn6kza.mongodb.net/?appName=ouladcluster2")["oulad_db"]
 
-# 1. Prend 20% des étudiants aléatoirement
-print("Sampling 20% of students...")
-all_students = list(local["students"].find({}, {"_id": 0}))
-sample_size = len(all_students) // 5
-sampled_students = random.sample(all_students, sample_size)
+# 1. Filter students from modules AAA and BBB only
+print("Filtering students from modules AAA and BBB...")
+sampled_students = list(local["students"].find(
+    {"code_module": {"$in": ["AAA", "BBB"]}},
+    {"_id": 0}
+))
 sampled_ids = set(s["id_student"] for s in sampled_students)
-print("Etudiants selectionnes : " + str(len(sampled_ids)))
+print("Students selected: " + str(len(sampled_ids)))
 
 # 2. Migration students
 print("Migration students...")
@@ -20,14 +20,14 @@ print("OK : " + str(len(sampled_students)) + " documents")
 
 # 3. Migration modules (tous)
 print("Migration modules...")
-docs = list(local["modules"].find({}, {"_id": 0}))
+docs = list(local["modules"].find({"code_module": {"$in": ["AAA", "BBB"]}}, {"_id": 0}))
 atlas["modules"].drop()
 atlas["modules"].insert_many(docs)
 print("OK : " + str(len(docs)) + " documents")
 
 # 4. Migration assessments_meta (tous)
 print("Migration assessments_meta...")
-docs = list(local["assessments_meta"].find({}, {"_id": 0}))
+docs = list(local["assessments_meta"].find({"code_module": {"$in": ["AAA", "BBB"]}}, {"_id": 0}))
 atlas["assessments_meta"].drop()
 atlas["assessments_meta"].insert_many(docs)
 print("OK : " + str(len(docs)) + " documents")
