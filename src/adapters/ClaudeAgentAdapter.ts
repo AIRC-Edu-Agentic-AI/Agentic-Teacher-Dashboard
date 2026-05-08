@@ -1,7 +1,7 @@
 import type { AgentService } from '../ports/AgentService'
 import type { ChatMessage, AgentContext } from '../types/domain'
 
-const MODEL = 'claude-sonnet-4-20250514'
+const MODEL = 'claude-sonnet-4-5'
 const API_URL = '/api/claude/v1/messages'
 
 function buildSystemPrompt(ctx: AgentContext): string {

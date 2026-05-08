@@ -1,3 +1,4 @@
+import { persist } from 'zustand/middleware'
 import { create } from 'zustand'
 import type { ChatMessage } from '../../types/domain'
 
@@ -11,7 +12,9 @@ interface ChatState {
   clearMessages: () => void
 }
 
-export const useChatStore = create<ChatState>((set) => ({
+export const useChatStore = create<ChatState>()(
+    persist(
+        (set) => ({
   messages: [],
   isStreaming: false,
 
@@ -32,4 +35,15 @@ export const useChatStore = create<ChatState>((set) => ({
   setStreaming: (isStreaming) => set({ isStreaming }),
 
   clearMessages: () => set({ messages: [] }),
-}))
+    }),
+        { name: 'chat-history',
+            onRehydrateStorage: () => (state) => {
+                    if (!state) return
+                    state.messages = state.messages.map((m) => ({
+                      ...m,
+                      timestamp: new Date(m.timestamp),
+                    }))
+                  },
+              }
+    )
+)
