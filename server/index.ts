@@ -19,7 +19,9 @@ app.get('/api/index', async (req, res) => {
   const courses = await db.collection("processed_courses").find({}, { projection: { students: 0 } }).toArray()
   const result = courses.map(c => ({
     module: c.module,
+    module_name: c.module_name,
     presentation: c.presentation,
+    presentation_name: c.presentation_name,
     course_length_days: c.num_weeks * 7,
     num_weeks: c.num_weeks,
     student_count: c.student_count
