@@ -1,3 +1,4 @@
+import './MessageBubble.css'
 import ReactMarkdown from 'react-markdown'
 import { Box, Typography } from '@mui/material'
 import type { ChatMessage } from '../../../types/domain'
@@ -60,20 +61,10 @@ export function MessageBubble({ message, isStreaming }: Props) {
           }}
         >
         {isUser ? message.content : (
-          <ReactMarkdown
-            components={{
-              p: ({ children }) => <p style={{ margin: '1px 0' }}>{children}</p>,
-              ul: ({ children }) => <ul style={{ margin: '1px 0', paddingLeft: 16 }}>{children}</ul>,
-              ol: ({ children }) => <ol style={{ margin: '1px 0', paddingLeft: 16 }}>{children}</ol>,
-              li: ({ children }) => <li style={{ margin: '1px 0' }}>{children}</li>,
-              h1: ({ children }) => <p style={{ margin: '2px 0', fontWeight: 600 }}>{children}</p>,
-              h2: ({ children }) => <p style={{ margin: '2px 0', fontWeight: 600 }}>{children}</p>,
-              h3: ({ children }) => <p style={{ margin: '2px 0', fontWeight: 600 }}>{children}</p>,
-            }}
-          >
-            {message.content}
-          </ReactMarkdown>
-        )}
+                  <div className="chat-bubble ai-message">
+                    <ReactMarkdown>{message.content}</ReactMarkdown>
+                  </div>
+                )}
           {isStreaming && (
             <Box
               component="span"
