@@ -1,11 +1,13 @@
-import React, { useState } from 'react'
+import React from 'react'
 import {
   Box, Drawer, List, ListItemButton, ListItemIcon, ListItemText,
-  Toolbar, Typography, Divider, Chip, Tooltip,
+  Toolbar, Typography, Divider, Chip, Tooltip, IconButton,
 } from '@mui/material'
+import LogoutIcon from '@mui/icons-material/LogoutRounded'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { moduleRegistry } from '../../modules/registry'
 import { useContextStore } from '../stores/contextStore'
+import { useAuthStore } from '../stores/authStore'
 
 const DRAWER_WIDTH = 220
 
@@ -13,12 +15,17 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const location = useLocation()
   const navigate = useNavigate()
   const { selectedModule, selectedPresentation, currentWeek, activeStudent } = useContextStore()
+  const { user, logout } = useAuthStore()
 
   const hasData = selectedModule && selectedPresentation
 
+  const handleLogout = () => {
+    logout()
+    navigate('/login')
+  }
+
   return (
     <Box sx={{ display: 'flex', height: '100vh', bgcolor: '#F4F3F0' }}>
-      {/* Sidebar */}
       <Drawer
         variant="permanent"
         sx={{
@@ -36,15 +43,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
       >
         <Toolbar sx={{ px: 2, py: 1.5, minHeight: '60px !important' }}>
           <Box>
-            <Typography
-              sx={{
-                fontFamily: '"IBM Plex Mono", monospace',
-                fontSize: 13,
-                fontWeight: 500,
-                color: '#fff',
-                letterSpacing: '0.04em',
-              }}
-            >
+            <Typography sx={{ fontFamily: '"IBM Plex Mono", monospace', fontSize: 13, fontWeight: 500, color: '#fff', letterSpacing: '0.04em' }}>
               RTI / MTSS
             </Typography>
             <Typography sx={{ fontSize: 11, color: '#6B7280', fontFamily: '"IBM Plex Mono", monospace' }}>
@@ -52,6 +51,25 @@ export function Shell({ children }: { children: React.ReactNode }) {
             </Typography>
           </Box>
         </Toolbar>
+
+        <Divider sx={{ borderColor: '#1E2D45' }} />
+
+        {/* User info */}
+        <Box sx={{ px: 2, py: 1.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Box>
+            <Typography sx={{ fontSize: 12, color: '#fff', fontFamily: '"IBM Plex Sans", sans-serif', fontWeight: 500 }}>
+              {user?.name}
+            </Typography>
+            <Typography sx={{ fontSize: 10, color: '#6B7280', fontFamily: '"IBM Plex Mono", monospace', textTransform: 'capitalize' }}>
+              {user?.role}
+            </Typography>
+          </Box>
+          <Tooltip title="Sign out" placement="right">
+            <IconButton onClick={handleLogout} size="small" sx={{ color: '#6B7280', '&:hover': { color: '#E24B4A', bgcolor: '#E24B4A11' } }}>
+              <LogoutIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        </Box>
 
         <Divider sx={{ borderColor: '#1E2D45' }} />
 
@@ -86,18 +104,13 @@ export function Shell({ children }: { children: React.ReactNode }) {
           {moduleRegistry.map((mod) => {
             const active = location.pathname.startsWith(mod.path)
             return (
-              <Tooltip
-                key={mod.id}
-                title={!hasData && mod.id !== 'dashboard' ? 'Select a module first' : ''}
-                placement="right"
-              >
+              <Tooltip key={mod.id} title={!hasData && mod.id !== 'dashboard' ? 'Select a module first' : ''} placement="right">
                 <span>
                   <ListItemButton
                     disabled={!hasData && mod.id !== 'dashboard'}
                     onClick={() => navigate(mod.path)}
                     sx={{
-                      borderRadius: 1.5,
-                      mb: 0.5,
+                      borderRadius: 1.5, mb: 0.5,
                       bgcolor: active ? '#1D9E7514' : 'transparent',
                       borderLeft: active ? '2px solid #1D9E75' : '2px solid transparent',
                       '&:hover': { bgcolor: '#1E2D45' },
@@ -131,7 +144,6 @@ export function Shell({ children }: { children: React.ReactNode }) {
         </Box>
       </Drawer>
 
-      {/* Main content */}
       <Box component="main" sx={{ flexGrow: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
         {children}
       </Box>
