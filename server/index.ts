@@ -39,7 +39,7 @@ app.get('/api/course/:module/:presentation', async (req, res) => {
   )
   if (!course) return res.status(404).json({ error: "Course not found" })
 
-  // ✅ On exclut tous les tableaux lourds
+  // ✅ We exclude all heavy arrays
   const students = await db.collection("processed_students").find(
     { code_module: module, code_presentation: presentation },
     { projection: { 
