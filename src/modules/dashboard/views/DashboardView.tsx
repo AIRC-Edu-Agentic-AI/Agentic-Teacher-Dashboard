@@ -9,6 +9,7 @@ import { TierDistributionChart } from '../components/TierDistributionChart'
 import { MarkDistributionChart } from '../components/MarkDistributionChart'
 import { StudentRiskTable } from '../components/StudentRiskTable'
 import type { StudentProfile } from '../../../types/domain'
+import { CourseInfoSections } from '../components/CourseInfoSections'
 
 export function DashboardView() {
   const navigate = useNavigate()
@@ -83,6 +84,18 @@ export function DashboardView() {
                 <MarkDistributionChart students={students} currentWeek={currentWeek} />
               </Box>
             </Box>
+            <Typography sx={{ 
+              fontSize: 14, 
+              fontWeight: 600, 
+              color: '#0A1628', 
+              mt: 4, 
+              mb: 1,
+              fontFamily: '"IBM Plex Sans", sans-serif' 
+            }}>
+              Course Management - {selectedModule} ({selectedPresentation})
+            </Typography>
+            
+            <CourseInfoSections />
           </>
         )}
       </Box>
