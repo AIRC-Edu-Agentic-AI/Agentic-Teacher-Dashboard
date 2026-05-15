@@ -1,0 +1,51 @@
+/* Main wrapper to handle full-height layout */
+.dashboard-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* Header toolbar with specific background and border */
+.dashboard-header {
+  background-color: #fff;
+  border-bottom: 1px solid #E5E3DC;
+  min-height: 52px !important;
+}
+
+.dashboard-header-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: #0A1628;
+  font-family: "IBM Plex Sans", sans-serif;
+}
+
+/* Scrollable area for the main content */
+.dashboard-content-scroll {
+  flex: 1;
+  overflow: auto;
+}
+
+/* Main 2-column grid: Table on left, Charts on right */
+.dashboard-main-grid {
+  display: grid;
+  grid-template-columns: 1fr 380px;
+  gap: 16px; /* Equivalent to gap: 2 in MUI */
+  margin-bottom: 16px; /* Equivalent to mb: 2 in MUI */
+  align-items: start;
+}
+
+/* Right-side column for distribution charts */
+.dashboard-chart-column {
+  display: flex;
+  flex-direction: column;
+  gap: 16px; /* Equivalent to gap: 2 in MUI */
+}
+
+/* Section title for the bottom management area */
+.dashboard-management-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #0A1628;
+  font-family: "IBM Plex Sans", sans-serif;
+}

@@ -1,32 +1,41 @@
 import { useEffect } from 'react'
-import { Box, Typography, CircularProgress, Alert, Toolbar } from '@mui/material'
+import { Box, Typography, CircularProgress, Alert, Toolbar, Grid } from '@mui/material' // Added Grid
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { container } from '../../../di/container'
 import { useContextStore } from '../../../shared/stores/contextStore'
+
+// Internal Components
 import { RiskTilesRow } from '../components/RiskTilesRow'
 import { TierDistributionChart } from '../components/TierDistributionChart'
 import { MarkDistributionChart } from '../components/MarkDistributionChart'
 import { StudentRiskTable } from '../components/StudentRiskTable'
-import type { StudentProfile } from '../../../types/domain'
 import { CourseInfoSections } from '../components/CourseInfoSections'
+import { CourseSchedule } from '../components/CourseSchedule' // Import the new component
+
+// Styles and Types
+import './DashboardView.css'
+import type { StudentProfile } from '../../../types/domain'
 
 export function DashboardView() {
   const navigate = useNavigate()
   const { selectedModule, selectedPresentation, currentWeek, setNumWeeks, setActiveStudent } = useContextStore()
 
+  // Data fetching: Index info
   const { error: indexError } = useQuery({
     queryKey: ['oulad-index'],
     queryFn: () => container.dataService.getIndex(),
     retry: false,
   })
 
+  // Data fetching: Course details
   const { data: course, isLoading: courseLoading } = useQuery({
     queryKey: ['course', selectedModule, selectedPresentation],
     queryFn: () => container.dataService.getCourse(selectedModule, selectedPresentation),
     enabled: !!selectedModule && !!selectedPresentation,
   })
 
+  // Sync week count to global state
   useEffect(() => {
     if (course) setNumWeeks(course.num_weeks)
   }, [course, setNumWeeks])
@@ -39,6 +48,7 @@ export function DashboardView() {
     navigate(`/student/${s.id_student}`)
   }
 
+  // Handle data-not-found scenario
   if (indexError) {
     return (
       <Box sx={{ p: 4 }}>
@@ -51,14 +61,16 @@ export function DashboardView() {
   }
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-      <Toolbar sx={{ bgcolor: '#fff', borderBottom: '1px solid #E5E3DC', minHeight: '52px !important', px: 3 }}>
-        <Typography sx={{ fontSize: 14, fontWeight: 500, color: '#0A1628', fontFamily: '"IBM Plex Sans", sans-serif' }}>
+    <Box className="dashboard-container">
+      {/* Top Header Section */}
+      <Toolbar className="dashboard-header" sx={{ px: 3 }}>
+        <Typography className="dashboard-header-title">
           Class Overview
         </Typography>
       </Toolbar>
 
-      <Box sx={{ flex: 1, overflow: 'auto', p: 3 }}>
+      <Box className="dashboard-content-scroll" sx={{ p: 3 }}>
+        {/* Loading Indicator */}
         {courseLoading && (
           <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center', mb: 3 }}>
             <CircularProgress size={18} sx={{ color: '#1D9E75' }} />
@@ -68,34 +80,41 @@ export function DashboardView() {
           </Box>
         )}
 
+        {/* Dashboard Main Content */}
         {students.length > 0 && (
           <>
             <RiskTilesRow students={students} currentWeek={currentWeek} />
 
-            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: 2, mb: 2, alignItems: 'start' }}>
+            <Box className="dashboard-main-grid">
               <StudentRiskTable
                 students={students}
                 currentWeek={currentWeek}
                 onSelect={handleStudentSelect}
                 selectedId={useContextStore.getState().activeStudent?.id_student ?? null}
               />
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              
+              <Box className="dashboard-chart-column">
                 <TierDistributionChart students={students} numWeeks={numWeeks} currentWeek={currentWeek} />
                 <MarkDistributionChart students={students} currentWeek={currentWeek} />
               </Box>
             </Box>
-            <Typography sx={{ 
-              fontSize: 14, 
-              fontWeight: 600, 
-              color: '#0A1628', 
-              mt: 4, 
-              mb: 1,
-              fontFamily: '"IBM Plex Sans", sans-serif' 
-            }}>
+
+            {/* Management Information Section */}
+            <Typography className="dashboard-management-title" sx={{ mt: 4, mb: 2 }}>
               Course Management - {selectedModule} ({selectedPresentation})
             </Typography>
             
-            <CourseInfoSections />
+            {/* Split layout for Schedule and Assignments */}
+            <Grid container spacing={3}>
+              <Grid item xs={12} lg={7}>
+                {/* Updated CourseSchedule will show lecture links and descriptions */}
+                <CourseSchedule />
+              </Grid>
+              <Grid item xs={12} lg={5}>
+                {/* Existing assignments timeline */}
+                <CourseInfoSections />
+              </Grid>
+            </Grid>
           </>
         )}
       </Box>

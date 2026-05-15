@@ -1,128 +1,164 @@
-import { Box, Typography, Paper, List, ListItem, ListItemText, Divider, Skeleton } from '@mui/material';
+import { useState, useMemo } from 'react';
+import { 
+  Box, Typography, Paper, List, ListItemText, Divider, 
+  Skeleton, Dialog, DialogTitle, DialogContent, IconButton, ListItemButton 
+} from '@mui/material';
+import CloseIcon from '@mui/icons-material/Close';
 import { useQuery } from '@tanstack/react-query';
 import { useContextStore } from '../../../shared/stores/contextStore';
 import { container } from '../../../di/container';
 import { AssessmentRecord } from '../../../types/domain';
 
-/**
- * Interface đảm bảo tính chặt chẽ của TypeScript, không dùng 'any'
- */
-interface InfoBoxProps {
-  title: string;
-  items: any[] | undefined;
-  emptyText: string;
-  iconColor: string;
-  renderItem: (item: any) => { primary: string; secondary: string };
+// Local interface to extend without touching domain.ts
+interface AssignmentUI extends AssessmentRecord {
+  weekDue: number;
+  averageScore: number;
+  distribution: number[]; // [0-20, 21-40, 41-60, 61-80, 81-100]
 }
 
-const InfoBox = ({ title, items, emptyText, iconColor, renderItem }: InfoBoxProps) => (
-  <Paper 
-    elevation={0} 
-    sx={{ 
-      p: 2, 
-      bgcolor: '#fcfcfc', 
-      border: '1px solid #E5E3DC', 
-      borderRadius: 2, 
-      height: '100%' 
-    }}
-  >
-    <Typography sx={{ 
-      fontWeight: 600, 
-      fontSize: 12, 
-      color: iconColor, 
-      mb: 1.5, 
-      textTransform: 'uppercase', 
-      fontFamily: '"IBM Plex Sans", sans-serif',
-      letterSpacing: '0.5px' 
-    }}>
-      {title}
-    </Typography>
-    <Divider sx={{ mb: 1, borderColor: '#E5E3DC' }} />
-    
-    {items && items.length > 0 ? (
-      <List dense sx={{ py: 0 }}>
-        {items.slice(0, 5).map((item, index) => {
-          const { primary, secondary } = renderItem(item);
-          return (
-            <ListItem key={index} sx={{ px: 0, py: 1, alignItems: 'flex-start' }}>
-              <ListItemText 
-                primary={primary} 
-                secondary={secondary} 
-                primaryTypographyProps={{ fontSize: 13, fontWeight: 500, color: '#0A1628', lineHeight: 1.2 }}
-                secondaryTypographyProps={{ fontSize: 11, color: '#6B7280', mt: 0.5 }}
-              />
-            </ListItem>
-          );
-        })}
-      </List>
-    ) : (
-      <Typography sx={{ fontSize: 12, color: '#9CA3AF', fontStyle: 'italic', mt: 1 }}>
-        {emptyText}
-      </Typography>
-    )}
-  </Paper>
-);
-
 export function CourseInfoSections() {
-  const { selectedModule, selectedPresentation } = useContextStore();
-  
-  // Truy vấn dữ liệu từ DI Container (DataService)
-  const { data: courseData, isLoading } = useQuery({
+  const { selectedModule, selectedPresentation, currentWeek } = useContextStore();
+  const [selectedAsgn, setSelectedAsgn] = useState<AssignmentUI | null>(null);
+
+  const { data, isLoading } = useQuery({
     queryKey: ['course-info', selectedModule, selectedPresentation],
     queryFn: () => container.dataService.getCourse(selectedModule, selectedPresentation),
     enabled: !!selectedModule && !!selectedPresentation
   });
 
-  if (isLoading) {
-    return <Skeleton variant="rectangular" height={250} sx={{ borderRadius: 2, mt: 2 }} />;
-  }
+  const assignments = useMemo(() => {
+    if (!data || !data.students) return [];
 
-  // Lấy dữ liệu mẫu từ sinh viên đầu tiên để hiển thị cấu trúc bài tập
-  const student = courseData?.students?.[0];
-  const assignments = student?.assessments;
+    return data.students[0].assessments.map((baseAsgn): AssignmentUI => {
+      let totalScore = 0, count = 0;
+      const dist = [0, 0, 0, 0, 0];
+
+      data.students.forEach(student => {
+        const sa = student.assessments.find(a => a.id_assessment === baseAsgn.id_assessment);
+        if (sa && typeof sa.score === 'number') {
+          totalScore += sa.score; count++;
+          if (sa.score <= 20) dist[0]++;
+          else if (sa.score <= 40) dist[1]++;
+          else if (sa.score <= 60) dist[2]++;
+          else if (sa.score <= 80) dist[3]++;
+          else dist[4]++;
+        }
+      });
+
+      const isExam = baseAsgn.assessment_type === 'Exam';
+      return {
+        ...baseAsgn,
+        weekDue: baseAsgn.date_due ? Math.ceil(baseAsgn.date_due / 7) : (isExam ? 39 : 0),
+        averageScore: count > 0 ? Math.round(totalScore / count) : 0,
+        distribution: dist
+      };
+    }).sort((a, b) => a.weekDue - b.weekDue);
+  }, [data]);
+
+  if (isLoading) return <Skeleton variant="rectangular" height={200} />;
 
   return (
-    <Box sx={{ 
-      display: 'grid', 
-      gridTemplateColumns: { xs: '1fr', md: '1fr 1fr 1fr' }, 
-      gap: 2, 
-      mt: 2 
-    }}>
-      {/* 1. Cột Assignments */}
-      <InfoBox 
-        title="Assignments" 
-        items={assignments} 
-        iconColor="#1D9E75" 
-        emptyText="No assignments found."
-        renderItem={(item: AssessmentRecord) => ({
-          primary: `${item.assessment_type} (ID: ${item.id_assessment})`,
-          secondary: `Weight: ${item.weight}% | Due: Day ${item.date_due ?? 'N/A'}`
-        })}
-      />
+    <Box sx={{ mt: 2 }}>
+      <Paper sx={{ p: 2, border: '1px solid #E5E3DC', borderRadius: 2 }}>
+        <Typography sx={{ fontWeight: 700, fontSize: 12, color: '#1D9E75', mb: 2, textTransform: 'uppercase' }}>
+          Assignments Overview
+        </Typography>
+        <List dense>
+          {assignments.map((item) => {
+            const isPast = item.weekDue < currentWeek;
+            return (
+              <ListItemButton 
+                key={item.id_assessment} 
+                onClick={() => setSelectedAsgn(item)}
+                sx={{ mb: 1, borderRadius: 1, border: '1px solid #F3F4F6', opacity: isPast ? 0.6 : 1 }}
+              >
+                <ListItemText 
+                  primary={item.assessment_type} 
+                  secondary={`Week ${item.weekDue} | Weight: ${item.weight}%`}
+                  primaryTypographyProps={{ fontWeight: 600, sx: { textDecoration: isPast ? 'line-through' : 'none' }}}
+                />
+                <Typography sx={{ fontWeight: 800, color: '#1D9E75' }}>{item.averageScore}%</Typography>
+              </ListItemButton>
+            );
+          })}
+        </List>
+      </Paper>
 
-      {/* 2. Cột Schedule (Lấy thông tin tổng quan khóa học) */}
-      <InfoBox 
-        title="Schedule" 
-        items={courseData ? [courseData] : []} 
-        iconColor="#0284c7" 
-        emptyText="No schedule data."
-        renderItem={(item) => ({
-          primary: `Module ${item.module}`,
-          secondary: `Duration: ${item.num_weeks} weeks | Presentation: ${item.presentation}`
-        })}
-      />
+      <Dialog open={!!selectedAsgn} onClose={() => setSelectedAsgn(null)} fullWidth maxWidth="sm">
+        <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: 700 }}>
+          {selectedAsgn?.assessment_type} Details
+          <IconButton onClick={() => setSelectedAsgn(null)}><CloseIcon /></IconButton>
+        </DialogTitle>
+        <DialogContent dividers>
+          {/* Header Info: Score & Weight */}
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3, p: 2, bgcolor: '#F8FAFC', borderRadius: 2 }}>
+            <Box>
+              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>AVG SCORE</Typography>
+              <Typography variant="h5" sx={{ fontWeight: 800, color: '#1D9E75' }}>{selectedAsgn?.averageScore}%</Typography>
+            </Box>
+            <Box sx={{ textAlign: 'right' }}>
+              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>WEIGHT</Typography>
+              <Typography variant="h5" sx={{ fontWeight: 800 }}>{selectedAsgn?.weight}%</Typography>
+            </Box>
+          </Box>
 
-      {/* 3. Cột Resources (Dữ liệu tương tác VLE từ sinh viên) */}
-      <InfoBox 
-        title="Resources" 
-        items={student?.weekly_clicks ? [{ clicks: student.weekly_clicks }] : []} 
-        iconColor="#7c3aed" 
-        emptyText="No resources available."
-        renderItem={(item) => ({
-          primary: "VLE Learning Materials",
-          secondary: `Last activity tracked: ${item.clicks.length} weeks of data`
-        })}
-      />
+          {/* CUSTOM BAR CHART Section */}
+          <Typography sx={{ fontWeight: 600, fontSize: 14, mb: 3 }}>Grade Distribution</Typography>
+          <Box sx={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', height: 180, mb: 4, px: 1 }}>
+            {selectedAsgn?.distribution.map((val, idx) => {
+              const maxVal = Math.max(...selectedAsgn.distribution);
+              const heightPct = maxVal > 0 ? (val / maxVal) * 100 : 0;
+              const labels = ['0-20', '21-40', '41-60', '61-80', '81-100'];
+              
+              return (
+                <Box key={idx} sx={{ 
+                  width: '18%', 
+                  height: '100%', 
+                  display: 'flex', 
+                  flexDirection: 'column', 
+                  alignItems: 'center',
+                  justifyContent: 'flex-end'
+                }}>
+                  <Typography sx={{ fontSize: 10, fontWeight: 700, mb: 1 }}>{val}</Typography>
+                  
+                  
+                  <Box sx={{ 
+                    width: '100%', 
+                    flexGrow: 1, 
+                    display: 'flex', 
+                    alignItems: 'flex-end'
+                  }}>
+                    <Box sx={{ 
+                      width: '100%', 
+                      height: `${heightPct}%`,
+                      minHeight: val > 0 ? '4px' : '0px',
+                      bgcolor: idx < 2 ? '#FDA4AF' : (idx === 2 ? '#FDE047' : '#6EE7B7'),
+                      borderRadius: '6px 6px 0 0',
+                      transition: 'height 0.4s ease-out'
+                    }} />
+                  </Box>
+
+                  <Typography sx={{ fontSize: 9, mt: 1.5, color: 'text.secondary', fontWeight: 600 }}>{labels[idx]}</Typography>
+                </Box>
+              );
+            })}
+          </Box>
+          <Divider sx={{ my: 2 }} />
+
+          {/* Information & Resources */}
+          <Typography sx={{ fontWeight: 600, fontSize: 14, mb: 1 }}>Assignment Info</Typography>
+          <Typography sx={{ fontSize: 13, color: '#4B5563', mb: 2 }}>
+            This {selectedAsgn?.assessment_type} (ID: {selectedAsgn?.id_assessment}) is due on Day {selectedAsgn?.date_due}.
+            It contributes significantly to the student's continuous assessment grade.
+          </Typography>
+
+          <Typography sx={{ fontWeight: 600, fontSize: 14, mb: 1 }}>Linked Resources</Typography>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+            <Typography sx={{ fontSize: 13, color: '#2563EB', cursor: 'pointer' }}>📎 Preparation_Guide.pdf</Typography>
+            <Typography sx={{ fontSize: 13, color: '#2563EB', cursor: 'pointer' }}>📎 Scoring_Rubric.docx</Typography>
+          </Box>
+        </DialogContent>
+      </Dialog>
     </Box>
   );
 }
