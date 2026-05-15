@@ -65,19 +65,37 @@ export function CourseInfoSections() {
         </Typography>
         <List dense>
           {assignments.map((item) => {
-            const isPast = item.weekDue < currentWeek;
+            // Check if the assignment is due in the future relative to the current simulation week
+            const isFuture = item.weekDue > currentWeek;
+
             return (
               <ListItemButton 
                 key={item.id_assessment} 
                 onClick={() => setSelectedAsgn(item)}
-                sx={{ mb: 1, borderRadius: 1, border: '1px solid #F3F4F6', opacity: isPast ? 0.6 : 1 }}
+                sx={{ 
+                  mb: 1, 
+                  borderRadius: 1, 
+                  border: '1px solid #F3F4F6', 
+                  /* Dim future assignments slightly, keep past/current ones fully opaque */
+                  opacity: isFuture ? 0.6 : 1 
+                }}
               >
                 <ListItemText 
                   primary={item.assessment_type} 
                   secondary={`Week ${item.weekDue} | Weight: ${item.weight}%`}
-                  primaryTypographyProps={{ fontWeight: 600, sx: { textDecoration: isPast ? 'line-through' : 'none' }}}
+                  /* Removed line-through decoration to keep past assignments clear */
+                  primaryTypographyProps={{ 
+                    fontWeight: 600, 
+                    sx: { textDecoration: 'none' } 
+                  }}
                 />
-                <Typography sx={{ fontWeight: 800, color: '#1D9E75' }}>{item.averageScore}%</Typography>
+                
+                <Typography sx={{ fontWeight: 800, color: isFuture ? '#9CA3AF' : '#1D9E75' }}>
+                  {/* Logic: Show a dash '-' for future assignments. 
+                      Show the actual average score only for past/current assignments.
+                  */}
+                  {isFuture ? '—' : `${item.averageScore}%`}
+                </Typography>
               </ListItemButton>
             );
           })}
