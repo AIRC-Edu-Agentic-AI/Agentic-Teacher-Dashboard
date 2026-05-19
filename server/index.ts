@@ -2,6 +2,7 @@ import express from 'express'
 import cors from 'cors'
 import { MongoClient } from 'mongodb'
 import dotenv from 'dotenv'
+import { auth } from 'express-oauth2-jwt-bearer'
 
 dotenv.config()
 
@@ -22,7 +23,12 @@ const db = client.db(process.env.MONGODB_DB ?? 'oulad_db')
 app.use(cors({ origin: CORS_ORIGIN }))
 app.use(express.json())
 
-app.get('/api/index', async (_req, res) => {
+const checkJwt = auth({
+  audience: process.env.AUTH0_AUDIENCE,
+  issuerBaseURL: `https://${process.env.AUTH0_DOMAIN}`,
+})
+
+app.get('/api/index', checkJwt, async (_req, res) => {
   const courses = await db.collection("processed_courses").find({}, { projection: { students: 0 } }).toArray()
   const result = courses.map(c => ({
     module: c.module,
@@ -36,23 +42,21 @@ app.get('/api/index', async (_req, res) => {
   res.json({ courses: result })
 })
 
-app.get('/api/course/:module/:presentation', async (req, res) => {
+app.get('/api/course/:module/:presentation', checkJwt, async (req, res) => {
   const { module, presentation } = req.params
   const course = await db.collection("processed_courses").findOne(
     { module, presentation },
     { projection: { _id: 0 } }
   )
   if (!course) return res.status(404).json({ error: "Course not found" })
-
   const students = await db.collection("processed_students").find(
     { code_module: module, code_presentation: presentation },
     { projection: { _id: 0 } }
   ).toArray()
-
   res.json({ ...course, students })
 })
 
-app.get('/api/student/:module/:presentation/:student_id', async (req, res) => {
+app.get('/api/student/:module/:presentation/:student_id', checkJwt, async (req, res) => {
   const { module, presentation, student_id } = req.params
   const student = await db.collection("processed_students").findOne(
     { code_module: module, code_presentation: presentation, id_student: parseInt(student_id) },
