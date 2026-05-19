@@ -22,6 +22,7 @@
     "d3": "^7.9.0",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
+    "express-oauth2-jwt-bearer": "^1.8.0",
     "mongodb": "^7.2.0",
     "papaparse": "^5.4.1",
     "react": "^18.3.1",

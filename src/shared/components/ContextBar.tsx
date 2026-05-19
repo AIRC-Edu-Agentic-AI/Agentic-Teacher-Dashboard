@@ -1,12 +1,16 @@
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import { Box, FormControl, InputLabel, Select, MenuItem, Slider, Typography } from '@mui/material'
 import { useQuery } from '@tanstack/react-query'
 import { tokens } from '../../theme'
 import { container } from '../../di/container'
 import { useContextStore } from '../stores/contextStore'
+import { useAuthStore } from '../stores/authStore'
 
 export function ContextBar() {
   const { selectedModule, selectedPresentation, currentWeek, setModule, setPresentation, setCurrentWeek, setNumWeeks } = useContextStore()
+  const { user } = useAuthStore()
+  const isAdmin = user?.role === 'admin'
+  const isAdvisor = user?.role === 'academic_advisor'
 
   const { data: index } = useQuery({
     queryKey: ['oulad-index'],
@@ -20,22 +24,33 @@ export function ContextBar() {
     enabled: !!selectedModule && !!selectedPresentation,
   })
 
+  const allowedCourses = useMemo(() => {
+    if (!index) return []
+    if (isAdmin) return index.courses
+    if (isAdvisor) return index.courses.filter((c) =>
+      user?.years?.some((y) => c.presentation.startsWith(y))
+    )
+    return index.courses.filter(
+      (c) => user?.modules?.includes(c.module) && user?.presentations?.includes(c.presentation)
+    )
+  }, [index, user, isAdmin, isAdvisor])
+
   useEffect(() => {
-    if (index && !selectedModule && index.courses.length > 0) {
-      const first = index.courses[0]
+    if (allowedCourses.length > 0 && !selectedModule) {
+      const first = allowedCourses[0]
       setModule(first.module)
       setPresentation(first.presentation)
       setNumWeeks(first.num_weeks)
     }
-  }, [index, selectedModule, setModule, setPresentation, setNumWeeks])
+  }, [allowedCourses, selectedModule])
 
   useEffect(() => {
     if (course) setNumWeeks(course.num_weeks)
   }, [course, setNumWeeks])
 
   const numWeeks = course?.num_weeks ?? 39
-  const moduleOptions = [...new Set(index?.courses.map((c) => c.module) ?? [])]
-  const presentationOptions = index?.courses.filter((c) => c.module === selectedModule).map((c) => c.presentation) ?? []
+  const moduleOptions = [...new Set(allowedCourses.map((c) => c.module))]
+  const presentationOptions = allowedCourses.filter((c) => c.module === selectedModule).map((c) => c.presentation)
 
   return (
     <Box sx={{
@@ -50,7 +65,7 @@ export function ContextBar() {
           label="Module"
           onChange={(e) => {
             const mod = e.target.value
-            const firstPres = index?.courses.find((c) => c.module === mod)?.presentation ?? ''
+            const firstPres = allowedCourses.find((c) => c.module === mod)?.presentation ?? ''
             setModule(mod)
             setPresentation(firstPres)
           }}
@@ -61,7 +76,6 @@ export function ContextBar() {
           ))}
         </Select>
       </FormControl>
-
       <FormControl size="small" sx={{ minWidth: 110 }}>
         <InputLabel sx={{ fontSize: 12 }}>Presentation</InputLabel>
         <Select
@@ -75,7 +89,6 @@ export function ContextBar() {
           ))}
         </Select>
       </FormControl>
-
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, minWidth: 220, flex: 1, maxWidth: 360 }}>
         <Typography sx={{ fontSize: 11, color: tokens.text.secondary, fontFamily: tokens.font.mono, whiteSpace: 'nowrap' }}>
           Week

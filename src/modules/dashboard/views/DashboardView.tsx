@@ -43,7 +43,7 @@ export function DashboardView() {
       (c) => user?.modules?.includes(c.module) && user?.presentations?.includes(c.presentation)
     )
   }, [index, user, isAdmin, isAdvisor])
-
+  console.log('allowedCourses:', allowedCourses)
   useEffect(() => {
     if (allowedCourses.length > 0 && !selectedModule) {
       const first = allowedCourses[0]
