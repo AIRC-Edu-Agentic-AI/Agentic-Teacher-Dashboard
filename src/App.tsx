@@ -1,20 +1,15 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { ThemeProvider, CssBaseline } from '@mui/material'
-import { theme } from './theme'
-import { Shell } from './shared/components/Shell'
-import { DashboardView } from './modules/dashboard/views/DashboardView'
-import { StudentDetailView } from './modules/student/views/StudentDetailView'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { ThemeProvider, createTheme, CssBaseline, Box, CircularProgress } from '@mui/material'
+import { ThemeProvider, CssBaseline, Box, CircularProgress } from '@mui/material'
 import { useAuth0 } from '@auth0/auth0-react'
+import { useEffect } from 'react'
+import { theme, tokens } from './theme'
 import { Shell } from './shared/components/Shell'
 import { DashboardView } from './modules/dashboard/views/DashboardView'
 import { StudentDetailView } from './modules/student/views/StudentDetailView'
 import { LoginView } from './modules/auth/views/LoginView'
-import { useEffect } from 'react'
 import { useAuthStore } from './shared/stores/authStore'
+import { setAccessTokenGetter } from './adapters/MongoDataAdapter'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -22,33 +17,8 @@ const queryClient = new QueryClient({
   },
 })
 
-const theme = createTheme({
-  palette: {
-    primary: { main: '#0F6E56', dark: '#085041' },
-    secondary: { main: '#BA7517' },
-    background: { default: '#F4F3F0', paper: '#ffffff' },
-  },
-  typography: {
-    fontFamily: '"IBM Plex Sans", sans-serif',
-  },
-  shape: { borderRadius: 8 },
-  components: {
-    MuiButton: {
-      styleOverrides: {
-        root: { textTransform: 'none', fontFamily: '"IBM Plex Sans", sans-serif', fontWeight: 500 },
-      },
-    },
-    MuiChip: {
-      styleOverrides: { root: { fontFamily: '"IBM Plex Mono", monospace' } },
-    },
-    MuiTableCell: {
-      styleOverrides: { root: { fontFamily: '"IBM Plex Sans", sans-serif' } },
-    },
-  },
-})
-
 function AppRoutes() {
-  const { isLoading, isAuthenticated, user, getIdTokenClaims } = useAuth0()
+  const { isLoading, isAuthenticated, user, getIdTokenClaims, getAccessTokenSilently, loginWithRedirect } = useAuth0()
   const { setUserFromAuth0, clearUser, user: storeUser } = useAuthStore()
 
   useEffect(() => {
@@ -56,29 +26,35 @@ function AppRoutes() {
       getIdTokenClaims().then((claims) => {
         setUserFromAuth0(user, claims)
       })
+      setAccessTokenGetter(async () => {
+        try {
+          return await getAccessTokenSilently({
+            authorizationParams: { audience: 'https://agentic-teacher-api' }
+          })
+        } catch (err: any) {
+          if (err.error === 'consent_required' || err.error === 'login_required') {
+            await loginWithRedirect({
+              authorizationParams: { audience: 'https://agentic-teacher-api' }
+            })
+          }
+          throw err
+        }
+      })
     } else {
       clearUser()
     }
   }, [isAuthenticated, user])
 
-  if (isLoading) {
+  if (isLoading || (isAuthenticated && !storeUser)) {
     return (
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>
-        <CircularProgress sx={{ color: '#0F6E56' }} />
+        <CircularProgress sx={{ color: tokens.brand.primary }} />
       </Box>
     )
   }
 
   if (!isAuthenticated) {
     return <LoginView />
-  }
-
-  if (!storeUser) {
-    return (
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>
-        <CircularProgress sx={{ color: '#0F6E56' }} />
-      </Box>
-    )
   }
 
   return (
@@ -99,13 +75,7 @@ export default function App() {
       <ThemeProvider theme={theme}>
         <CssBaseline />
         <BrowserRouter>
-          <Shell>
-            <Routes>
-              <Route path="/" element={<DashboardView />} />
-              <Route path="/student/:id" element={<StudentDetailView />} />
-              <Route path="/student" element={<StudentDetailView />} />
-            </Routes>
-          </Shell>
+          <AppRoutes />
         </BrowserRouter>
       </ThemeProvider>
     </QueryClientProvider>
