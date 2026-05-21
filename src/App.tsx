@@ -1,10 +1,3 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { ThemeProvider, CssBaseline } from '@mui/material'
-import { theme } from './theme'
-import { Shell } from './shared/components/Shell'
-import { DashboardView } from './modules/dashboard/views/DashboardView'
-import { StudentDetailView } from './modules/student/views/StudentDetailView'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ThemeProvider, createTheme, CssBaseline, Box, CircularProgress } from '@mui/material'
@@ -15,6 +8,7 @@ import { StudentDetailView } from './modules/student/views/StudentDetailView'
 import { LoginView } from './modules/auth/views/LoginView'
 import { useEffect } from 'react'
 import { useAuthStore } from './shared/stores/authStore'
+import { setAccessTokenGetter } from './adapters/MongoDataAdapter'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -48,13 +42,27 @@ const theme = createTheme({
 })
 
 function AppRoutes() {
-  const { isLoading, isAuthenticated, user, getIdTokenClaims } = useAuth0()
+  const { isLoading, isAuthenticated, user, getIdTokenClaims, getAccessTokenSilently, loginWithRedirect } = useAuth0()
   const { setUserFromAuth0, clearUser, user: storeUser } = useAuthStore()
 
   useEffect(() => {
     if (isAuthenticated && user) {
       getIdTokenClaims().then((claims) => {
         setUserFromAuth0(user, claims)
+      })
+      setAccessTokenGetter(async () => {
+        try {
+          return await getAccessTokenSilently({
+            authorizationParams: { audience: 'https://agentic-teacher-api' }
+          })
+        } catch (err: any) {
+          if (err.error === 'consent_required' || err.error === 'login_required') {
+            await loginWithRedirect({
+              authorizationParams: { audience: 'https://agentic-teacher-api' }
+            })
+          }
+          throw err
+        }
       })
     } else {
       clearUser()
@@ -99,13 +107,7 @@ export default function App() {
       <ThemeProvider theme={theme}>
         <CssBaseline />
         <BrowserRouter>
-          <Shell>
-            <Routes>
-              <Route path="/" element={<DashboardView />} />
-              <Route path="/student/:id" element={<StudentDetailView />} />
-              <Route path="/student" element={<StudentDetailView />} />
-            </Routes>
-          </Shell>
+          <AppRoutes />
         </BrowserRouter>
       </ThemeProvider>
     </QueryClientProvider>

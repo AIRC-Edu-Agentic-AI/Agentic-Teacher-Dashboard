@@ -2,6 +2,9 @@ import express from 'express'
 import cors from 'cors'
 import { MongoClient } from 'mongodb'
 import dotenv from 'dotenv'
+import { auth } from 'express-oauth2-jwt-bearer'
+import { classroomRoutes } from './routes/classrooms.ts'
+import { assessmentRoutes } from './routes/assessments.ts'
 
 dotenv.config()
 
@@ -21,6 +24,13 @@ const db = client.db(process.env.MONGODB_DB ?? 'oulad_db')
 
 app.use(cors({ origin: CORS_ORIGIN }))
 app.use(express.json())
+
+const checkJwt = auth({
+  audience: process.env.AUTH0_AUDIENCE,
+  issuerBaseURL: `https://${process.env.AUTH0_DOMAIN}`,
+})
+
+app.use('/api', checkJwt)
 
 app.get('/api/index', async (_req, res) => {
   const courses = await db.collection("processed_courses").find({}, { projection: { students: 0 } }).toArray()
@@ -43,12 +53,10 @@ app.get('/api/course/:module/:presentation', async (req, res) => {
     { projection: { _id: 0 } }
   )
   if (!course) return res.status(404).json({ error: "Course not found" })
-
   const students = await db.collection("processed_students").find(
     { code_module: module, code_presentation: presentation },
     { projection: { _id: 0 } }
   ).toArray()
-
   res.json({ ...course, students })
 })
 
@@ -61,6 +69,9 @@ app.get('/api/student/:module/:presentation/:student_id', async (req, res) => {
   if (!student) return res.status(404).json({ error: "Student not found" })
   res.json(student)
 })
+
+app.use('/api/classrooms', classroomRoutes(db))
+app.use('/api/classrooms', assessmentRoutes(db))
 
 async function start() {
   await client.connect()
