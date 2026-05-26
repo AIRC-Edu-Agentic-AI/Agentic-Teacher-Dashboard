@@ -47,8 +47,32 @@ export const tokens = {
   },
 } as const
 
+const sharedComponents = {
+  MuiButton: {
+    styleOverrides: {
+      root: { textTransform: 'none', fontWeight: 500 },
+    },
+  },
+  MuiChip: {
+    styleOverrides: { root: { fontFamily: tokens.font.mono } },
+  },
+  MuiTableCell: {
+    styleOverrides: { root: { fontFamily: tokens.font.sans } },
+  },
+  MuiToolbar: {
+    styleOverrides: { root: { minHeight: '52px !important' } },
+  },
+  MuiCard: {
+    defaultProps: { elevation: 0 },
+    styleOverrides: {
+      root: { borderRadius: 8 },
+    },
+  },
+}
+
 export const theme = createTheme({
   palette: {
+    mode: 'light',
     primary:    { main: tokens.brand.primary, dark: tokens.brand.primaryDark },
     secondary:  { main: tokens.brand.secondary },
     background: { default: tokens.surface.default, paper: tokens.surface.paper },
@@ -58,24 +82,33 @@ export const theme = createTheme({
   },
   shape: { borderRadius: 8 },
   components: {
-    MuiButton: {
-      styleOverrides: {
-        root: { textTransform: 'none', fontWeight: 500 },
-      },
-    },
-    MuiChip: {
-      styleOverrides: { root: { fontFamily: tokens.font.mono } },
-    },
-    MuiTableCell: {
-      styleOverrides: { root: { fontFamily: tokens.font.sans } },
-    },
-    MuiToolbar: {
-      styleOverrides: { root: { minHeight: '52px !important' } },
-    },
+    ...sharedComponents,
     MuiCard: {
       defaultProps: { elevation: 0 },
       styleOverrides: {
         root: { border: `1px solid ${tokens.border.default}`, borderRadius: 8 },
+      },
+    },
+  },
+})
+
+export const darkTheme = createTheme({
+  palette: {
+    mode: 'dark',
+    primary:    { main: tokens.brand.primaryLight, dark: tokens.brand.primary },
+    secondary:  { main: tokens.brand.secondary },
+    background: { default: '#0D1B2A', paper: '#0A1628' },
+  },
+  typography: {
+    fontFamily: tokens.font.sans,
+  },
+  shape: { borderRadius: 8 },
+  components: {
+    ...sharedComponents,
+    MuiCard: {
+      defaultProps: { elevation: 0 },
+      styleOverrides: {
+        root: { border: `1px solid #1E2D45`, borderRadius: 8 },
       },
     },
   },

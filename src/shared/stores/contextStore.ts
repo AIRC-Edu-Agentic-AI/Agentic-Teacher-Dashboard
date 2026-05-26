@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { StudentProfile } from '../../types/domain'
+import { usePreferencesStore } from './preferencesStore'
 
 interface ContextState {
   selectedModule: string
@@ -20,7 +21,7 @@ interface ContextState {
 export const useContextStore = create<ContextState>((set) => ({
   selectedModule: '',
   selectedPresentation: '',
-  currentWeek: 15,
+  currentWeek: usePreferencesStore.getState().preferences.default_week,
   numWeeks: 39,
   activeStudent: null,
   chatPanelOpen: false,

@@ -1,6 +1,7 @@
 import React from 'react'
 import DashboardIcon from '@mui/icons-material/GridViewRounded'
 import PersonIcon from '@mui/icons-material/PersonRounded'
+import AccountCircleIcon from '@mui/icons-material/AccountCircleRounded'
 
 export interface ModuleConfig {
   id: string
@@ -21,5 +22,11 @@ export const moduleRegistry: ModuleConfig[] = [
     label: 'Student detail',
     path: '/student',
     icon: <PersonIcon fontSize="small" />,
+  },
+  {
+    id: 'profile',
+    label: 'My profile',
+    path: '/profile',
+    icon: <AccountCircleIcon fontSize="small" />,
   },
 ]

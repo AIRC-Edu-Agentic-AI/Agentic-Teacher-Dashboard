@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import {
   Typography, Table, TableBody, TableCell, TableContainer,
   TableHead, TableRow, TableSortLabel, Chip, Box, TextField, InputAdornment,
@@ -11,6 +11,7 @@ import RemoveIcon from '@mui/icons-material/RemoveRounded'
 import { TIER_COLORS, type TierNumber } from '../../../shared/constants/tiers'
 import { tokens } from '../../../theme'
 import type { StudentProfile } from '../../../types/domain'
+import { usePreferencesStore } from '../../../shared/stores/preferencesStore'
 
 interface Props {
   students: StudentProfile[]
@@ -32,10 +33,15 @@ export function StudentRiskTable({ students, currentWeek, onSelect, selectedId }
   const [sortField, setSortField] = useState<'risk' | 'id' | 'imd'>('risk')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [search, setSearch] = useState('')
-  
-  // Pagination State
+  const { preferences } = usePreferencesStore()
   const [page, setPage] = useState(0)
-  const [rowsPerPage, setRowsPerPage] = useState(10)
+  const [rowsPerPage, setRowsPerPage] = useState(preferences.students_per_page)
+
+  // Sync rowsPerPage when preferences change
+  useEffect(() => {
+    setRowsPerPage(preferences.students_per_page)
+    setPage(0)
+  }, [preferences.students_per_page])
 
   const weekIdx = Math.max(0, currentWeek - 1)
 
@@ -52,7 +58,6 @@ export function StudentRiskTable({ students, currentWeek, onSelect, selectedId }
     })
   }, [students, sortField, sortDir, weekIdx, search])
 
-  // Get current page of students
   const visibleStudents = useMemo(() => {
     return sorted.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
   }, [sorted, page, rowsPerPage])
@@ -67,7 +72,7 @@ export function StudentRiskTable({ students, currentWeek, onSelect, selectedId }
   }
 
   const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setRowsPerPage(parseInt(event.target.value, 10))
+    setRowsPerPage(parseInt(event.target.value, 10) as 10 | 20 | 50)
     setPage(0)
   }
 
@@ -183,10 +188,9 @@ export function StudentRiskTable({ students, currentWeek, onSelect, selectedId }
           </TableBody>
         </Table>
       </TableContainer>
-      
-      {/* Dynamic pagination controls */}
+
       <TablePagination
-        rowsPerPageOptions={[10, 25, 50]}
+        rowsPerPageOptions={[10, 20, 50]}
         component="div"
         count={sorted.length}
         rowsPerPage={rowsPerPage}

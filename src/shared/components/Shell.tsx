@@ -25,7 +25,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const hasData = selectedModule && selectedPresentation
 
   return (
-    <Box sx={{ display: 'flex', height: '100vh', bgcolor: '#F4F3F0' }}>
+    <Box sx={{ display: 'flex', height: '100vh', bgcolor: 'background.default' }}>
       <Drawer
         variant="permanent"
         sx={{
@@ -150,7 +150,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
       <Box component="main" sx={{ flexGrow: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
         <ContextBar />
         <Box sx={{ flexGrow: 1, overflow: 'hidden', display: 'flex' }}>
-          <Box sx={{ flexGrow: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
+          <Box sx={{ flexGrow: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
             {children}
           </Box>
           <Box

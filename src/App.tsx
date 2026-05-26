@@ -8,7 +8,10 @@ import { Shell } from './shared/components/Shell'
 import { DashboardView } from './modules/dashboard/views/DashboardView'
 import { StudentDetailView } from './modules/student/views/StudentDetailView'
 import { LoginView } from './modules/auth/views/LoginView'
+import { ProfileView } from './modules/profile/views/ProfileView'
 import { useAuthStore } from './shared/stores/authStore'
+import { usePreferencesStore } from './shared/stores/preferencesStore'
+import { useContextStore } from './shared/stores/contextStore'
 import { setAccessTokenGetter } from './adapters/MongoDataAdapter'
 
 const queryClient = new QueryClient({
@@ -26,7 +29,8 @@ function AppRoutes() {
       getIdTokenClaims().then((claims) => {
         setUserFromAuth0(user, claims)
       })
-      setAccessTokenGetter(async () => {
+
+      const getToken = async () => {
         try {
           return await getAccessTokenSilently({
             authorizationParams: { audience: 'https://agentic-teacher-api' }
@@ -39,7 +43,16 @@ function AppRoutes() {
           }
           throw err
         }
+      }
+
+      setAccessTokenGetter(getToken)
+
+      // Load preferences then sync default_week to contextStore
+      usePreferencesStore.getState().fetchPreferences(getToken).then(() => {
+        const { default_week } = usePreferencesStore.getState().preferences
+        useContextStore.getState().setCurrentWeek(default_week)
       })
+
     } else {
       clearUser()
     }
@@ -63,6 +76,7 @@ function AppRoutes() {
         <Route path="/" element={<DashboardView />} />
         <Route path="/student/:id" element={<StudentDetailView />} />
         <Route path="/student" element={<StudentDetailView />} />
+        <Route path="/profile" element={<ProfileView />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Shell>

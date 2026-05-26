@@ -2,6 +2,9 @@ import express from 'express'
 import cors from 'cors'
 import { MongoClient } from 'mongodb'
 import dotenv from 'dotenv'
+import { auth } from 'express-oauth2-jwt-bearer'
+
+import { profileRoutes } from './routes/profile.ts'
 
 dotenv.config()
 
@@ -22,6 +25,15 @@ const db = client.db(process.env.MONGODB_DB ?? 'oulad_db')
 app.use(cors({ origin: CORS_ORIGIN }))
 app.use(express.json())
 
+// JWT middleware — protects all /api/* routes
+const checkJwt = auth({
+  audience: process.env.AUTH0_AUDIENCE,
+  issuerBaseURL: `https://${process.env.AUTH0_DOMAIN}`,
+})
+
+app.use('/api', checkJwt)
+
+// Existing routes
 app.get('/api/index', async (_req, res) => {
   const courses = await db.collection("processed_courses").find({}, { projection: { students: 0 } }).toArray()
   const result = courses.map(c => ({
@@ -61,6 +73,10 @@ app.get('/api/student/:module/:presentation/:student_id', async (req, res) => {
   if (!student) return res.status(404).json({ error: "Student not found" })
   res.json(student)
 })
+
+
+// Profile routes
+app.use('/api/profile', profileRoutes(db))
 
 async function start() {
   await client.connect()
