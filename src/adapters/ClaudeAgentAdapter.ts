@@ -5,13 +5,19 @@ const MODEL = 'claude-sonnet-4-20250514'
 const API_URL = '/api/claude/v1/messages'
 
 function buildSystemPrompt(ctx: AgentContext): string {
-  const studentBlock = ctx.activeStudent
-    ? `Active student: #${ctx.activeStudent.id_student} | ` +
-      `Tier ${ctx.activeStudent.tier_by_week[ctx.currentWeek - 1]} | ` +
-      `Risk ${(ctx.activeStudent.risk_by_week[ctx.currentWeek - 1] * 100).toFixed(0)}% | ` +
-      `IMD band: ${ctx.activeStudent.imd_band} | ` +
-      `Prior attempts: ${ctx.activeStudent.num_of_prev_attempts}`
-    : 'No student selected (discussing class-level data)'
+  const activeStudent = ctx.activeStudent
+  let studentBlock = 'No student selected (discussing class-level data)'
+  if (activeStudent) {
+    const tier = activeStudent.tier_by_week[ctx.currentWeek - 1]
+    const risk = activeStudent.risk_by_week[ctx.currentWeek - 1]
+    const tierStr = tier !== null && tier !== undefined ? `Tier ${tier}` : 'Unknown Tier'
+    const riskStr = risk !== null && risk !== undefined ? `Risk ${(risk * 100).toFixed(0)}%` : 'Unknown Risk'
+    studentBlock = `Active student: #${activeStudent.id_student} | ` +
+      `${tierStr} | ` +
+      `${riskStr} | ` +
+      `IMD band: ${activeStudent.imd_band} | ` +
+      `Prior attempts: ${activeStudent.num_of_prev_attempts}`
+  }
 
   return `You are a pedagogical advisor integrated into an RTI/MTSS teacher dashboard for higher education.
 

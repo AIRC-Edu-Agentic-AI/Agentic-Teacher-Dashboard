@@ -1,7 +1,9 @@
 node_modules/
 dist/
 .env
-
+students_test.csv
+.gitignore
+server/routes/*.ts
 # OULAD source data (place CSVs here, do not commit)
 public/data/oulad/*.csv
 

@@ -8,7 +8,8 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "preprocess": "python scripts/python/preprocess.py",
-    "lint": "eslint src --ext ts,tsx --report-unused-disable-directives"
+    "lint": "eslint src --ext ts,tsx --report-unused-disable-directives",
+    "server": "tsx server/index.ts"
   },
   "dependencies": {
     "@emotion/react": "^11.11.4",
@@ -16,16 +17,24 @@
     "@mui/icons-material": "^5.15.20",
     "@mui/material": "^5.15.20",
     "@tanstack/react-query": "^5.40.0",
+    "cors": "^2.8.6",
     "d3": "^7.9.0",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "express-oauth2-jwt-bearer": "^1.9.0",
+    "mongodb": "^7.2.0",
     "papaparse": "^5.4.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "react-markdown": "^10.1.0",
     "react-router-dom": "^6.23.1",
     "recharts": "^2.12.7",
     "zustand": "^4.5.2"
   },
   "devDependencies": {
+    "@types/cors": "^2.8.19",
     "@types/d3": "^7.4.3",
+    "@types/express": "^5.0.6",
     "@types/node": "^20.14.2",
     "@types/papaparse": "^5.3.14",
     "@types/react": "^18.3.3",
@@ -34,6 +43,7 @@
     "autoprefixer": "^10.4.19",
     "postcss": "^8.4.38",
     "tailwindcss": "^3.4.4",
+    "tsx": "^4.22.3",
     "typescript": "^5.4.5",
     "vite": "^5.3.1"
   }

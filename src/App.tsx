@@ -4,6 +4,9 @@ import { ThemeProvider, createTheme, CssBaseline } from '@mui/material'
 import { Shell } from './shared/components/Shell'
 import { DashboardView } from './modules/dashboard/views/DashboardView'
 import { StudentDetailView } from './modules/student/views/StudentDetailView'
+import { ClassroomView } from './modules/classroom/views/ClassroomView'
+import { ClassroomCreateView } from './modules/classroom/views/ClassroomCreateView'
+import { ClassroomDetailView } from './modules/classroom/views/ClassroomDetailView'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -47,6 +50,9 @@ export default function App() {
               <Route path="/" element={<DashboardView />} />
               <Route path="/student/:id" element={<StudentDetailView />} />
               <Route path="/student" element={<StudentDetailView />} />
+              <Route path="/classroom" element={<ClassroomView />} />
+              <Route path="/classroom/new" element={<ClassroomCreateView />} />
+              <Route path="/classroom/:id" element={<ClassroomDetailView />} />
             </Routes>
           </Shell>
         </BrowserRouter>
