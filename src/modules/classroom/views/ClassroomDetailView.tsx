@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import {
   Alert, Box, Button, Chip, CircularProgress, Table, TableBody,
-  TableCell, TableHead, TableRow, TextField, Toolbar, Typography,
+  TableCell, TableHead, TableRow, TableContainer, TextField, Toolbar, Typography,
 } from '@mui/material'
 import ArrowBackIcon from '@mui/icons-material/ArrowBackRounded'
 import DeleteIcon from '@mui/icons-material/DeleteRounded'
@@ -187,27 +187,104 @@ export function ClassroomDetailView() {
           Students — {classroom.student_ids?.length ?? 0} total
         </Typography>
 
-        {classroom.student_ids?.length === 0 ? (
-          <Typography sx={{ fontSize: 13, color: '#9CA3AF' }}>No students yet. Import a CSV to add students.</Typography>
+        {!classroom.students || classroom.students.length === 0 ? (
+          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 6, px: 2, border: '1px dashed #E5E3DC', borderRadius: 2, bgcolor: '#FAFAFA' }}>
+            <UploadIcon sx={{ fontSize: 40, color: '#9CA3AF', mb: 1.5 }} />
+            <Typography sx={{ fontSize: 14, fontWeight: 500, color: '#4B5563', mb: 0.5 }}>No students imported yet</Typography>
+            <Typography sx={{ fontSize: 12, color: '#6B7280', textAlign: 'center', mb: 2, maxWidth: 320 }}>
+              Upload a CSV file containing student demographics to populate this classroom.
+            </Typography>
+            <Button variant="outlined" size="small" startIcon={<UploadIcon />} onClick={() => fileRef.current?.click()}
+              sx={{ fontSize: 12, borderColor: '#E5E3DC', color: '#6B7280', '&:hover': { borderColor: '#B5B3AC', bgcolor: '#F3F4F6' } }}>
+              Select CSV File
+            </Button>
+          </Box>
         ) : (
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell sx={{ fontFamily: '"IBM Plex Mono", monospace', fontSize: 11, color: '#6B7280', bgcolor: '#F8F7F4' }}>Student ID</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {classroom.student_ids?.map(sid => (
-                <TableRow key={sid} hover sx={{ cursor: 'pointer' }} onClick={() => {
-                  setModule(classroom.module)
-                  setPresentation(classroom.code_presentation)
-                  navigate(`/student/${sid}`)
-                }}>
-                  <TableCell sx={{ fontFamily: '"IBM Plex Mono", monospace', fontSize: 12 }}>#{sid}</TableCell>
+          <TableContainer sx={{ border: '1px solid #E5E3DC', borderRadius: 2, overflow: 'hidden', bgcolor: '#fff' }}>
+            <Table size="medium">
+              <TableHead>
+                <TableRow sx={{ bgcolor: '#F8F7F4' }}>
+                  <TableCell sx={{ fontFamily: '"IBM Plex Sans", sans-serif', fontSize: 11, fontWeight: 600, color: '#4B5563', py: 1.5 }}>Student Name & ID</TableCell>
+                  <TableCell sx={{ fontFamily: '"IBM Plex Sans", sans-serif', fontSize: 11, fontWeight: 600, color: '#4B5563', py: 1.5 }}>Gender</TableCell>
+                  <TableCell sx={{ fontFamily: '"IBM Plex Sans", sans-serif', fontSize: 11, fontWeight: 600, color: '#4B5563', py: 1.5 }}>Final Outcome</TableCell>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHead>
+              <TableBody>
+                {classroom.students.map((student: any) => {
+                  const initials = student.name?.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase() || 'ST'
+                  const outcome = student.final_result || 'Pass'
+                  const isWithdrawn = outcome === 'Withdrawn'
+                  const isFail = outcome === 'Fail'
+                  
+                  let chipBg = '#E1F5EE'
+                  let chipColor = '#0F6E56'
+                  if (isWithdrawn) {
+                    chipBg = '#F3F4F6'
+                    chipColor = '#4B5563'
+                  } else if (isFail) {
+                    chipBg = '#FCEBEB'
+                    chipColor = '#A32D2D'
+                  } else if (outcome === 'Distinction') {
+                    chipBg = '#E0F2FE'
+                    chipColor = '#0369A1'
+                  }
+
+                  const hash = student.name?.charCodeAt(0) || 0
+                  const colors = ['#E0F2FE', '#FEE2E2', '#FEF3C7', '#D1FAE5', '#F3E8FF', '#FFE4E6']
+                  const textColors = ['#0369A1', '#B91C1C', '#B45309', '#047857', '#6D28D9', '#BE185D']
+                  const avatarBg = colors[hash % colors.length]
+                  const avatarColor = textColors[hash % textColors.length]
+
+                  return (
+                    <TableRow key={student.id_student} hover 
+                      sx={{ 
+                        cursor: 'pointer', 
+                        opacity: isWithdrawn ? 0.7 : 1,
+                        '&:hover': { bgcolor: '#F8F7F4' } 
+                      }} 
+                      onClick={() => {
+                        setModule(classroom.module)
+                        setPresentation(classroom.code_presentation)
+                        navigate(`/student/${student.id_student}`)
+                      }}
+                    >
+                      <TableCell sx={{ py: 1.5 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                          <Box sx={{ 
+                            width: 36, height: 36, borderRadius: '50%', 
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            bgcolor: avatarBg, color: avatarColor, 
+                            fontSize: 12, fontWeight: 600, fontFamily: '"IBM Plex Sans", sans-serif'
+                          }}>
+                            {initials}
+                          </Box>
+                          <Box>
+                            <Typography sx={{ fontSize: 13, fontWeight: 500, color: '#0A1628' }}>
+                              {student.name}
+                            </Typography>
+                            <Typography sx={{ fontSize: 11, fontFamily: '"IBM Plex Mono", monospace', color: '#6B7280', mt: 0.25 }}>
+                              #{student.id_student}
+                            </Typography>
+                          </Box>
+                        </Box>
+                      </TableCell>
+                      <TableCell sx={{ fontSize: 12, color: '#4B5563' }}>{student.gender}</TableCell>
+                      <TableCell sx={{ py: 1.5 }}>
+                        <Chip label={outcome} size="small" 
+                          sx={{ 
+                            bgcolor: chipBg, color: chipColor, 
+                            fontSize: 11, height: 22, fontWeight: 500,
+                            fontFamily: '"IBM Plex Sans", sans-serif',
+                            borderRadius: 1.5
+                          }} 
+                        />
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
+              </TableBody>
+            </Table>
+          </TableContainer>
         )}
 
         {id && <AssessmentSection classroomId={id} />}

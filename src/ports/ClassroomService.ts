@@ -9,6 +9,7 @@ export interface Classroom {
   status: 'active' | 'archived'
   created_at?: Date
   updated_at?: Date
+  students?: any[]
 }
 
 export interface Assessment {
