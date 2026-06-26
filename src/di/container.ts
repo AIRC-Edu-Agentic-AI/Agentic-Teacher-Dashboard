@@ -7,6 +7,7 @@
  */
 
 import { MongoDataAdapter } from '../adapters/MongoDataAdapter'
+import { ProcessedDataAdapter } from '../adapters/ProcessedDataAdapter'
 import { MockMasteryAdapter } from '../adapters/MockMasteryAdapter'
 import { ClaudeAgentAdapter } from '../adapters/ClaudeAgentAdapter'
 
@@ -19,7 +20,8 @@ export const container: {
   agentService: AgentService
   masteryService: MasteryService
 } = {
-  dataService: new MongoDataAdapter(),
+  // For offline demo use ProcessedDataAdapter which reads preprocessed JSON
+  dataService: new ProcessedDataAdapter(),
   agentService: new ClaudeAgentAdapter(),
   masteryService: new MockMasteryAdapter(),
 }
