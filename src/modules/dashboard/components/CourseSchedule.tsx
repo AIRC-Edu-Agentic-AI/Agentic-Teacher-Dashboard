@@ -1,44 +1,55 @@
-import { useMemo } from 'react';
-import { Box, Typography, Paper, List, ListItem, Link, Chip, Divider } from '@mui/material';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Box, Typography, Paper, List, ListItem, Link, Chip, Divider, TextField, IconButton, Checkbox, Button } from '@mui/material';
+import DeleteIcon from '@mui/icons-material/Delete';
+import AddIcon from '@mui/icons-material/Add';
+import SaveIcon from '@mui/icons-material/Save';
 // Adjust the import path based on your folder structure
 import { useContextStore } from '../../../shared/stores/contextStore';
+import { container } from '../../../di/container';
+import type { ScheduleItem } from '../../../types/domain';
 
 // Local interface for Schedule UI, ensuring no modifications to the domain layer
-interface ScheduleItemUI {
-  id: string;
-  week: number;
-  title: string;
-  description: string;
-  lectureLink: string;
-  isCurrent: boolean;
-  isPast: boolean;
-}
+interface ScheduleItemUI extends ScheduleItem {}
 
 export function CourseSchedule() {
-  const { selectedModule, currentWeek, numWeeks } = useContextStore();
+  const { selectedModule, selectedPresentation, currentWeek, numWeeks } = useContextStore();
 
-  // Generate mock schedule data dynamically based on contextStore state
-  const scheduleItems = useMemo<ScheduleItemUI[]>(() => {
-    // Return empty if no module is selected yet
-    if (!selectedModule) return [];
+  const [scheduleItems, setScheduleItems] = useState<ScheduleItemUI[]>([])
+  const [loading, setLoading] = useState(false)
 
-    const items: ScheduleItemUI[] = [];
-    
-    // Create mock data for each week up to numWeeks (default is 39)
-    for (let w = 1; w <= numWeeks; w++) {
-      items.push({
-        id: `schedule-week-${w}`,
-        week: w,
-        title: `Lecture Week ${w}: Core Concepts of ${selectedModule}`,
-        description: `This session covers the fundamental and advanced topics assigned for week ${w}. Please ensure you have reviewed the preliminary materials before joining.`,
-        lectureLink: `https://lms.university.edu/${selectedModule}/lectures/week-${w}`,
-        isCurrent: w === currentWeek,
-        isPast: w < currentWeek,
-      });
+  useEffect(() => {
+    if (!selectedModule || !selectedPresentation) {
+      setScheduleItems([])
+      return
     }
-    
-    return items;
-  }, [selectedModule, currentWeek, numWeeks]);
+
+    let mounted = true
+    setLoading(true)
+    container.dataService.getSchedules(selectedModule, selectedPresentation)
+      .then((s) => {
+        if (!mounted) return
+        // ensure every item has an id
+        const normalized = s.map((it) => ({ ...it, id: it.id || `${selectedModule}_${selectedPresentation}_${it.week}_${Math.random().toString(36).slice(2,8)}` }))
+        setScheduleItems(normalized)
+      })
+      .catch((e) => {
+        console.warn('Failed to load schedules', e)
+        setScheduleItems([])
+      })
+      .finally(() => setLoading(false))
+
+    return () => { mounted = false }
+  }, [selectedModule, selectedPresentation])
+
+  const saveAll = async () => {
+    if (!selectedModule || !selectedPresentation) return
+    setLoading(true)
+    try {
+      await container.dataService.saveSchedules(selectedModule, selectedPresentation, scheduleItems)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   // If no module is selected, we can hide the schedule or show a placeholder
   if (!selectedModule) {
@@ -56,66 +67,46 @@ export function CourseSchedule() {
           Course Schedule & Lectures
         </Typography>
         
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+          <Typography sx={{ fontWeight: 700 }}>Course Schedule & Lectures</Typography>
+          <Box>
+            <Button startIcon={<AddIcon />} size="small" onClick={() => {
+              const id = `${selectedModule}_${selectedPresentation}_${Date.now()}`
+              setScheduleItems((s) => [...s, { id, week: currentWeek, activity: 'New session', time: 'TBD', is_makeup: false }])
+            }}>Add</Button>
+            <Button startIcon={<SaveIcon />} size="small" onClick={saveAll} disabled={loading} sx={{ ml: 1 }}>Save</Button>
+          </Box>
+        </Box>
+
         <List disablePadding>
-          {scheduleItems.map((item, index) => (
-            <Box key={item.id}>
-              <ListItem 
-                sx={{ 
-                  display: 'flex', 
-                  flexDirection: 'column', 
-                  alignItems: 'flex-start',
-                  p: 2,
-                  borderRadius: 2,
-                  mb: 1,
-                  // Highlight current week, dim past weeks
-                  bgcolor: item.isCurrent ? '#F0FDF4' : (item.isPast ? '#F9FAFB' : '#FFFFFF'),
-                  border: item.isCurrent ? '1px solid #86EFAC' : '1px solid transparent',
-                  opacity: item.isPast ? 0.6 : 1,
-                  transition: 'all 0.2s ease-in-out',
-                }}
-              >
-                {/* Header: Week number and Status badge */}
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%', mb: 1 }}>
-                  <Typography sx={{ fontWeight: 800, fontSize: 14, color: item.isCurrent ? '#166534' : 'text.primary' }}>
-                    Week {item.week}
-                  </Typography>
-                  {item.isCurrent && (
-                    <Chip label="Current Week" size="small" sx={{ bgcolor: '#22C55E', color: 'white', fontWeight: 600, fontSize: 10, height: 20 }} />
-                  )}
-                  {item.isPast && (
-                    <Chip label="Completed" size="small" variant="outlined" sx={{ fontSize: 10, height: 20 }} />
-                  )}
-                </Box>
+          {scheduleItems.map((item, index) => {
+            const isPast = item.week < currentWeek
+            return (
+              <Box key={item.id}>
+                <ListItem sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', p: 2, borderRadius: 2, mb: 1 }}>
+                  <Box sx={{ width: '100%', display: 'flex', gap: 2 }}>
+                    <TextField label="Week" type="number" size="small" value={item.week} onChange={(e) => setScheduleItems((prev) => prev.map((it) => it.id === item.id ? { ...it, week: Number(e.target.value) } : it))} sx={{ width: 96 }} />
+                    <TextField label="Activity" size="small" value={item.activity} onChange={(e) => setScheduleItems((prev) => prev.map((it) => it.id === item.id ? { ...it, activity: e.target.value } : it))} sx={{ flex: 1 }} />
+                    <TextField label="Time" size="small" value={item.time} onChange={(e) => setScheduleItems((prev) => prev.map((it) => it.id === item.id ? { ...it, time: e.target.value } : it))} sx={{ width: 160 }} />
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                      <Checkbox checked={!!item.is_makeup} onChange={(e) => setScheduleItems((prev) => prev.map((it) => it.id === item.id ? { ...it, is_makeup: e.target.checked } : it))} />
+                      <Typography variant="caption">Make-up</Typography>
+                    </Box>
+                    <IconButton onClick={() => setScheduleItems((prev) => prev.filter((it) => it.id !== item.id))}><DeleteIcon /></IconButton>
+                  </Box>
 
-                {/* Content: Title and Description */}
-                <Typography sx={{ fontWeight: 600, fontSize: 15, mb: 0.5 }}>
-                  {item.title}
-                </Typography>
-                <Typography sx={{ fontSize: 13, color: 'text.secondary', mb: 1.5 }}>
-                  {item.description}
-                </Typography>
-
-                {/* Footer: Lecture Link */}
-                <Link 
-                  href={item.lectureLink} 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  sx={{ 
-                    fontSize: 13, 
-                    fontWeight: 600, 
-                    color: item.isPast ? 'text.secondary' : '#2563EB',
-                    textDecoration: 'none',
-                    '&:hover': { textDecoration: 'underline' }
-                  }}
-                >
-                  {item.isPast ? 'Review Lecture Recording ↗' : 'Join Lecture ↗'}
-                </Link>
-              </ListItem>
-              
-              {/* Render divider except for the last item */}
-              {index < scheduleItems.length - 1 && <Divider sx={{ my: 0.5, borderStyle: 'dashed' }} />}
-            </Box>
-          ))}
+                  <Box sx={{ width: '100%', mt: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Typography sx={{ fontSize: 13, color: isPast ? 'text.secondary' : 'text.primary' }}>{item.note ?? ''}</Typography>
+                    <Button size="small" onClick={async () => {
+                      // save single item
+                      await container.dataService.saveSchedules(selectedModule, selectedPresentation, scheduleItems)
+                    }}>Save Item</Button>
+                  </Box>
+                </ListItem>
+                {index < scheduleItems.length - 1 && <Divider sx={{ my: 0.5, borderStyle: 'dashed' }} />}
+              </Box>
+            )
+          })}
         </List>
       </Paper>
     </Box>
