@@ -2,6 +2,7 @@ import express from 'express'
 import cors from 'cors'
 import { MongoClient, ObjectId } from 'mongodb'
 import dotenv from 'dotenv'
+import { validateScheduleEvent } from '../src/shared/scheduleEventValidation'
 
 dotenv.config()
 
@@ -75,44 +76,52 @@ app.post('/api/students/import', async (req, res) => {
   }
 })
 
-app.get('/api/schedules', async (req, res) => {
+app.get('/api/schedule-events', async (req, res) => {
   try {
-    const schedules = await db.collection("schedules").find({}).toArray()
-    res.status(200).json(schedules)
+    const { module, presentation, kind } = req.query
+    const filter: Record<string, unknown> = {}
+    if (module) filter.module = module
+    if (presentation) filter.presentation = presentation
+    if (kind) filter.kind = kind
+    const events = await db.collection('schedule_events').find(filter).sort({ date: 1 }).toArray()
+    res.status(200).json(events)
   } catch (error: any) {
     res.status(500).json({ error: error.message })
   }
 })
 
-app.post('/api/schedules', async (req, res) => {
+app.post('/api/schedule-events', async (req, res) => {
   try {
-    const schedule = req.body
-    const result = await db.collection("schedules").insertOne(schedule)
-    res.status(201).json({ _id: result.insertedId, ...schedule })
+    const errors = validateScheduleEvent(req.body)
+    if (errors.length) return res.status(400).json({ error: errors.join('; ') })
+    const event = { ...req.body, created_at: new Date().toISOString() }
+    delete event._id
+    const result = await db.collection('schedule_events').insertOne(event)
+    res.status(201).json({ _id: result.insertedId, ...event })
   } catch (error: any) {
     res.status(500).json({ error: error.message })
   }
 })
 
-app.put('/api/schedules/:id', async (req, res) => {
+app.patch('/api/schedule-events/:id', async (req, res) => {
   try {
-    const { id } = req.params
-    const updateData = req.body
-    delete updateData._id
-    const result = await db.collection("schedules").updateOne(
-      { _id: new ObjectId(id) },
-      { $set: updateData }
+    const patch = { ...req.body }
+    delete patch._id
+    const result = await db.collection('schedule_events').findOneAndUpdate(
+      { _id: new ObjectId(req.params.id) },
+      { $set: patch },
+      { returnDocument: 'after' },
     )
-    res.status(200).json({ updated: result.modifiedCount })
+    if (!result) return res.status(404).json({ error: 'Not found' })
+    res.status(200).json(result)
   } catch (error: any) {
     res.status(500).json({ error: error.message })
   }
 })
 
-app.delete('/api/schedules/:id', async (req, res) => {
+app.delete('/api/schedule-events/:id', async (req, res) => {
   try {
-    const { id } = req.params
-    const result = await db.collection("schedules").deleteOne({ _id: new ObjectId(id) })
+    const result = await db.collection('schedule_events').deleteOne({ _id: new ObjectId(req.params.id) })
     res.status(200).json({ deleted: result.deletedCount })
   } catch (error: any) {
     res.status(500).json({ error: error.message })
@@ -162,28 +171,6 @@ app.get('/api/attendance-stats', async (_req, res) => {
   } catch (error: any) {
     res.status(500).json({ error: error.message })
   }
-})
-
-// Schedules: store per-course schedules in collection `schedules`
-app.get('/api/schedules/:module/:presentation', async (req, res) => {
-  const { module, presentation } = req.params
-  const doc = await db.collection('schedules').findOne({ module, presentation }, { projection: { _id: 0 } })
-  if (!doc) return res.json({ schedules: [] })
-  res.json({ schedules: doc.schedules ?? [] })
-})
-
-app.post('/api/schedules/:module/:presentation', async (req, res) => {
-  const { module, presentation } = req.params
-  const { schedules } = req.body
-  if (!Array.isArray(schedules)) return res.status(400).json({ error: 'Invalid schedules payload' })
-
-  await db.collection('schedules').updateOne(
-    { module, presentation },
-    { $set: { schedules } },
-    { upsert: true }
-  )
-
-  res.json({ ok: true })
 })
 
 async function start() {
