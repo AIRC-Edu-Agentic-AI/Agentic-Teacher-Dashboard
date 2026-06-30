@@ -57,6 +57,13 @@ export function ChatPanel() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
+  useEffect(() => {
+    return () => {
+      approvalResolver.current?.({ action: 'reject', reason: 'cancelled' })
+      approvalResolver.current = null
+    }
+  }, [])
+
   function requestApproval(action: ProposedAction): Promise<ApprovalDecision> {
     return new Promise((resolve) => { approvalResolver.current = resolve; setPendingApproval(action) })
   }
@@ -76,6 +83,9 @@ export function ChatPanel() {
   const sendMessage = async (text: string) => {
     if (!text.trim() || isStreaming) return
     setError(null); setInput(''); setActivity([])
+    approvalResolver.current?.({ action: 'reject', reason: 'cancelled' })
+    approvalResolver.current = null
+    setPendingApproval(null)
 
     const userMsg: ChatMessage = { id: crypto.randomUUID(), role: 'user', content: text.trim(), timestamp: new Date() }
     addMessage(userMsg)
@@ -93,9 +103,9 @@ export function ChatPanel() {
 
   // Run a prompt seeded from the Home suggestion cards.
   useEffect(() => {
-    if (pendingPrompt) { const p = pendingPrompt; setPendingPrompt(null); sendMessage(p) }
+    if (pendingPrompt && !isStreaming) { const p = pendingPrompt; setPendingPrompt(null); sendMessage(p) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingPrompt])
+  }, [pendingPrompt, isStreaming])
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', bgcolor: tokens.surface.paper }}>

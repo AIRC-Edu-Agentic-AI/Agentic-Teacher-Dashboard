@@ -51,11 +51,13 @@ export async function executeTool(
 
     if (name === 'create_task') {
       const dueWeek = typeof input.due_week === 'number' ? input.due_week : ctx.currentWeek
+      const note = typeof input.note === 'string' ? input.note.trim() : ''
+      const title = note ? `${String(input.title)} — ${note}` : String(input.title)
       const created = await deps.scheduleService.create({
         module: ctx.module,
         presentation: ctx.presentation,
         kind: 'task',
-        title: String(input.title),
+        title,
         date: weekToDate(ctx.presentation, dueWeek),
         week: dueWeek,
         source: 'intervention' as TaskSource,
