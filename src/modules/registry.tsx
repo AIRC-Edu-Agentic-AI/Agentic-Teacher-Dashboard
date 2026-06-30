@@ -1,4 +1,5 @@
 import React from 'react'
+import HomeIcon from '@mui/icons-material/HomeRounded'
 import DashboardIcon from '@mui/icons-material/GridViewRounded'
 import PersonIcon from '@mui/icons-material/PersonRounded'
 import ClassIcon from '@mui/icons-material/ClassRounded';
@@ -13,9 +14,15 @@ export interface ModuleConfig {
 
 export const moduleRegistry: ModuleConfig[] = [
   {
+    id: 'home',
+    label: 'Home',
+    path: '/',
+    icon: <HomeIcon fontSize="small" />,
+  },
+  {
     id: 'dashboard',
     label: 'Class overview',
-    path: '/',
+    path: '/overview',
     icon: <DashboardIcon fontSize="small" />,
   },
   {

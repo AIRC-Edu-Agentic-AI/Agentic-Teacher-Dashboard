@@ -11,6 +11,7 @@ import { LoginView } from './modules/auth/views/LoginView'
 import { useAuthStore } from './shared/stores/authStore'
 import { ClassView } from './modules/class/views/ClassView'
 import { WeeklyScheduleView } from './modules/schedule/views/WeeklyScheduleView'
+import { HomeView } from './modules/home/views/HomeView'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -47,7 +48,8 @@ function AppRoutes() {
   return (
     <Shell>
       <Routes>
-        <Route path="/" element={<DashboardView />} />
+        <Route path="/" element={<HomeView />} />
+        <Route path="/overview" element={<DashboardView />} />
         <Route path="/student/:id" element={<StudentDetailView />} />
         <Route path="/student" element={<StudentDetailView />} />
         <Route path="/class" element={<ClassView />} />
