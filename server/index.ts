@@ -2,7 +2,7 @@ import express from 'express'
 import cors from 'cors'
 import { MongoClient, ObjectId } from 'mongodb'
 import dotenv from 'dotenv'
-import { validateScheduleEvent } from '../src/shared/scheduleEventValidation'
+import { validateScheduleEvent, validateScheduleEventPatch } from '../src/shared/scheduleEventValidation'
 
 dotenv.config()
 
@@ -107,6 +107,8 @@ app.patch('/api/schedule-events/:id', async (req, res) => {
   try {
     const patch = { ...req.body }
     delete patch._id
+    const errors = validateScheduleEventPatch(patch)
+    if (errors.length) return res.status(400).json({ error: errors.join('; ') })
     const result = await db.collection('schedule_events').findOneAndUpdate(
       { _id: new ObjectId(req.params.id) },
       { $set: patch },

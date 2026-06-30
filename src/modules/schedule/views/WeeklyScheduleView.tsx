@@ -82,6 +82,10 @@ export function WeeklyScheduleView() {
     return <Box sx={{ p: 3 }}><Alert severity="info">Select a module and presentation to view the schedule.</Alert></Box>
   }
 
+  if (!range) {
+    return <Box sx={{ p: 3 }}><Alert severity="warning">No calendar anchor is configured for this presentation, so the weekly grid can't be shown.</Alert></Box>
+  }
+
   return (
     <Box sx={{ p: 3 }}>
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
