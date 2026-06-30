@@ -185,3 +185,44 @@ export interface ScheduleEvent {
 
   created_at: string
 }
+
+// ─── Agentic loop ────────────────────────────────────────────────────────────
+
+export type ProposedActionTool = 'send_notification' | 'create_task'
+
+export interface ProposedAction {
+  tool: ProposedActionTool
+  input: Record<string, unknown>   // tool_use input, editable before approval
+  preview: string                  // human-readable summary for the card
+}
+
+export type ApprovalDecision =
+  | { action: 'approve'; input?: Record<string, unknown> }
+  | { action: 'reject'; reason?: string }
+
+export type AgentEvent =
+  | { type: 'text'; text: string }
+  | { type: 'tool_start'; tool: string; input: Record<string, unknown> }
+  | { type: 'tool_result'; tool: string; ok: boolean; summary: string }
+  | { type: 'done' }
+  | { type: 'error'; message: string }
+
+export interface AgentRunCallbacks {
+  onEvent(e: AgentEvent): void
+  requestApproval(action: ProposedAction): Promise<ApprovalDecision>
+}
+
+// ─── Student notifications ───────────────────────────────────────────────────
+
+export type StudentNotificationType = 'intervention' | 'encouragement' | 'reminder' | 'general'
+
+export interface StudentNotification {
+  _id?: string
+  student_id: number
+  module: string
+  presentation: string
+  title: string
+  body: string
+  type: StudentNotificationType
+  created_at: string
+}
