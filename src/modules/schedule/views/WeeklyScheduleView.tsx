@@ -59,15 +59,23 @@ export function WeeklyScheduleView() {
 
   async function handleDelete() {
     if (!editing?._id) return
-    await container.scheduleService.remove(editing._id)
-    setDialogOpen(false); setEditing(null)
-    await load()
+    try {
+      await container.scheduleService.remove(editing._id)
+      setDialogOpen(false); setEditing(null)
+      await load()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to delete event')
+    }
   }
 
   async function toggleStatus(e: ScheduleEvent, status: 'done' | 'dismissed') {
     if (!e._id) return
-    await container.scheduleService.update(e._id, { status })
-    await load()
+    try {
+      await container.scheduleService.update(e._id, { status })
+      await load()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update event')
+    }
   }
 
   if (!selectedModule || !selectedPresentation) {

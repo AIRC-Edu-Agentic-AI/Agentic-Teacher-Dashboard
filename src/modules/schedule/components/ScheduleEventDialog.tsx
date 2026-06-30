@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import {
   Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField,
-  MenuItem, Stack,
+  MenuItem, Stack, Alert,
 } from '@mui/material'
 import type { ScheduleEvent, ScheduleEventKind, ClassType } from '../../../types/domain'
 
@@ -74,7 +74,7 @@ export function ScheduleEventDialog(props: ScheduleEventDialogProps) {
               </TextField>
             </>
           )}
-          {error && <div style={{ color: '#c62828', fontSize: 13 }}>{error}</div>}
+          {error && <Alert severity="error">{error}</Alert>}
         </Stack>
       </DialogContent>
       <DialogActions>
