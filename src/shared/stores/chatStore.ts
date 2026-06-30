@@ -4,16 +4,19 @@ import type { ChatMessage } from '../../types/domain'
 interface ChatState {
   messages: ChatMessage[]
   isStreaming: boolean
+  pendingPrompt: string | null
 
   addMessage: (msg: ChatMessage) => void
   appendToLast: (text: string) => void
   setStreaming: (v: boolean) => void
   clearMessages: () => void
+  setPendingPrompt: (p: string | null) => void
 }
 
 export const useChatStore = create<ChatState>((set) => ({
   messages: [],
   isStreaming: false,
+  pendingPrompt: null,
 
   addMessage: (msg) =>
     set((s) => ({ messages: [...s.messages, msg] })),
@@ -32,4 +35,6 @@ export const useChatStore = create<ChatState>((set) => ({
   setStreaming: (isStreaming) => set({ isStreaming }),
 
   clearMessages: () => set({ messages: [] }),
+
+  setPendingPrompt: (pendingPrompt) => set({ pendingPrompt }),
 }))

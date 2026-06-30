@@ -7,10 +7,4 @@ export interface AgentService {
     context: AgentContext,
     cb: AgentRunCallbacks,
   ): Promise<void>
-
-  /** @deprecated one-shot text stream; removed once ChatPanel migrates to run(). */
-  stream(
-    messages: ChatMessage[],
-    context: AgentContext,
-  ): AsyncIterable<string>
 }

@@ -9,7 +9,8 @@ import { useContextStore } from '../../../shared/stores/contextStore'
 import { useChatStore } from '../../../shared/stores/chatStore'
 import { MessageBubble } from './MessageBubble'
 import { useQuery } from '@tanstack/react-query'
-import type { AgentContext, ChatMessage, StudentProfile } from '../../../types/domain'
+import type { AgentContext, ChatMessage, StudentProfile, AgentEvent, ProposedAction, ApprovalDecision } from '../../../types/domain'
+import { ProposedActionCard } from './ProposedActionCard'
 
 function buildContext(
   module: string, presentation: string, currentWeek: number, numWeeks: number,
@@ -36,9 +37,12 @@ const SUGGESTED_PROMPTS = [
 
 export function ChatPanel() {
   const { selectedModule, selectedPresentation, currentWeek, numWeeks, activeStudent, setChatPanelOpen } = useContextStore()
-  const { messages, isStreaming, addMessage, appendToLast, setStreaming, clearMessages } = useChatStore()
+  const { messages, isStreaming, addMessage, appendToLast, setStreaming, clearMessages, pendingPrompt, setPendingPrompt } = useChatStore()
   const [input, setInput] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [activity, setActivity] = useState<string[]>([])
+  const [pendingApproval, setPendingApproval] = useState<ProposedAction | null>(null)
+  const approvalResolver = useRef<((d: ApprovalDecision) => void) | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
 
   const { data: course } = useQuery({
@@ -53,28 +57,45 @@ export function ChatPanel() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
+  function requestApproval(action: ProposedAction): Promise<ApprovalDecision> {
+    return new Promise((resolve) => { approvalResolver.current = resolve; setPendingApproval(action) })
+  }
+  function resolveApproval(d: ApprovalDecision) {
+    setPendingApproval(null)
+    approvalResolver.current?.(d)
+    approvalResolver.current = null
+  }
+
+  function handleEvent(e: AgentEvent) {
+    if (e.type === 'text') appendToLast(e.text)
+    else if (e.type === 'tool_start') setActivity((a) => [...a, `▸ ${e.tool}`])
+    else if (e.type === 'tool_result') setActivity((a) => [...a, `${e.ok ? '✓' : '✕'} ${e.tool}`])
+    else if (e.type === 'error') setError(e.message)
+  }
+
   const sendMessage = async (text: string) => {
     if (!text.trim() || isStreaming) return
-    setError(null)
-    setInput('')
+    setError(null); setInput(''); setActivity([])
 
     const userMsg: ChatMessage = { id: crypto.randomUUID(), role: 'user', content: text.trim(), timestamp: new Date() }
     addMessage(userMsg)
     addMessage({ id: crypto.randomUUID(), role: 'assistant', content: '', timestamp: new Date() })
     setStreaming(true)
-
     try {
       const ctx = buildContext(selectedModule, selectedPresentation, currentWeek, numWeeks, activeStudent, students)
-      for await (const chunk of container.agentService.stream([...messages, userMsg], ctx)) {
-        appendToLast(chunk)
-      }
+      await container.agentService.run([...messages, userMsg], ctx, { onEvent: handleEvent, requestApproval })
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Unknown error')
-      appendToLast('\n\n[Error: Could not complete response]')
     } finally {
       setStreaming(false)
     }
   }
+
+  // Run a prompt seeded from the Home suggestion cards.
+  useEffect(() => {
+    if (pendingPrompt) { const p = pendingPrompt; setPendingPrompt(null); sendMessage(p) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingPrompt])
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', bgcolor: tokens.surface.paper }}>
@@ -141,6 +162,14 @@ export function ChatPanel() {
           <MessageBubble key={msg.id} message={msg}
             isStreaming={isStreaming && i === messages.length - 1 && msg.role === 'assistant'} />
         ))}
+        {activity.length > 0 && (
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 1 }}>
+            {activity.map((a, i) => (
+              <Chip key={i} label={a} size="small" sx={{ fontSize: 10, height: 18, fontFamily: tokens.font.mono }} />
+            ))}
+          </Box>
+        )}
+        {pendingApproval && <ProposedActionCard action={pendingApproval} onDecision={resolveApproval} />}
         <div ref={bottomRef} />
       </Box>
 
