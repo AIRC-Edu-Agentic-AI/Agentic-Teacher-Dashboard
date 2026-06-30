@@ -1,12 +1,16 @@
-import type { ChatMessage, AgentContext } from '../types/domain'
+import type { ChatMessage, AgentContext, AgentRunCallbacks } from '../types/domain'
 
 export interface AgentService {
-  /**
-   * Streams an assistant response token by token.
-   * Yields string chunks; caller appends them to the current message.
-   */
+  /** Runs the agentic tool loop, emitting events and requesting approval for writes. */
+  run(
+    messages: ChatMessage[],
+    context: AgentContext,
+    cb: AgentRunCallbacks,
+  ): Promise<void>
+
+  /** @deprecated one-shot text stream; removed once ChatPanel migrates to run(). */
   stream(
     messages: ChatMessage[],
-    context: AgentContext
+    context: AgentContext,
   ): AsyncIterable<string>
 }

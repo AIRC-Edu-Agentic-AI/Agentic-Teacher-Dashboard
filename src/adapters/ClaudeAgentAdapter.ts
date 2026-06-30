@@ -1,7 +1,10 @@
 import type { AgentService } from '../ports/AgentService'
-import type { ChatMessage, AgentContext } from '../types/domain'
+import type { ChatMessage, AgentContext, AgentRunCallbacks } from '../types/domain'
+import { container } from '../di/container'
+import { TOOL_DEFINITIONS } from '../modules/chat/agent/tools'
+import { runAgentLoop, type AnthropicResponse } from '../modules/chat/agent/runAgentLoop'
 
-const MODEL = 'claude-sonnet-4-20250514'
+const MODEL = 'claude-sonnet-4-6'
 const API_URL = '/api/claude/v1/messages'
 
 function buildSystemPrompt(ctx: AgentContext): string {
@@ -35,6 +38,37 @@ Be specific, evidence-based, and actionable. Cite the student's actual risk scor
 }
 
 export class ClaudeAgentAdapter implements AgentService {
+  async run(messages: ChatMessage[], context: AgentContext, cb: AgentRunCallbacks): Promise<void> {
+    const toolGuidance = '\n\nYou have tools to inspect at-risk students and to act. ' +
+      'When asked who needs attention, call list_at_risk_students, then get_student_detail to diagnose. ' +
+      'Propose interventions with send_notification and create_task — these require teacher approval. ' +
+      'Be concise.'
+
+    const postToAnthropic = async (body: object): Promise<AnthropicResponse> => {
+      const res = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      if (!res.ok) throw new Error(`Claude API error ${res.status}: ${await res.text()}`)
+      return res.json() as Promise<AnthropicResponse>
+    }
+
+    await runAgentLoop({
+      system: buildSystemPrompt(context) + toolGuidance,
+      messages: messages.map((m) => ({ role: m.role, content: m.content })),
+      tools: TOOL_DEFINITIONS,
+      context,
+      deps: {
+        dataService: container.dataService,
+        scheduleService: container.scheduleService,
+        notificationService: container.notificationService,
+      },
+      callbacks: cb,
+      postToAnthropic,
+    })
+  }
+
   async *stream(messages: ChatMessage[], context: AgentContext): AsyncIterable<string> {
     const body = JSON.stringify({
       model: MODEL,
