@@ -11,7 +11,6 @@ import { TierDistributionChart } from '../components/TierDistributionChart'
 import { MarkDistributionChart } from '../components/MarkDistributionChart'
 import { StudentRiskTable } from '../components/StudentRiskTable'
 import { CourseInfoSections } from '../components/CourseInfoSections'
-import { CourseSchedule } from '../components/CourseSchedule'
 import './DashboardView.css'
 import type { StudentProfile } from '../../../types/domain'
 
@@ -114,13 +113,7 @@ export function DashboardView() {
             </Typography>
 
             <Grid container spacing={3} sx={{ pb: 4 }}>
-              <Grid item xs={12} lg={7}>
-                <Box className="dashboard-section-card" sx={{ height: '100%', minHeight: 450 }}>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 2 }}>Weekly Schedule</Typography>
-                  <CourseSchedule />
-                </Box>
-              </Grid>
-              <Grid item xs={12} lg={5}>
+              <Grid item xs={12}>
                 <Box className="dashboard-section-card" sx={{ height: '100%', minHeight: 450 }}>
                   <CourseInfoSections />
                 </Box>
