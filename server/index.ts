@@ -3,6 +3,7 @@ import cors from 'cors'
 import { MongoClient, ObjectId } from 'mongodb'
 import dotenv from 'dotenv'
 import { validateScheduleEvent, validateScheduleEventPatch } from '../src/shared/scheduleEventValidation'
+import { validateStudentNotification } from '../src/shared/studentNotificationValidation'
 
 dotenv.config()
 
@@ -125,6 +126,33 @@ app.delete('/api/schedule-events/:id', async (req, res) => {
   try {
     const result = await db.collection('schedule_events').deleteOne({ _id: new ObjectId(req.params.id) })
     res.status(200).json({ deleted: result.deletedCount })
+  } catch (error: any) {
+    res.status(500).json({ error: error.message })
+  }
+})
+
+app.get('/api/student-notifications', async (req, res) => {
+  try {
+    const { module, presentation, student_id } = req.query
+    const filter: Record<string, unknown> = {}
+    if (module) filter.module = module
+    if (presentation) filter.presentation = presentation
+    if (student_id) filter.student_id = Number(student_id)
+    const notes = await db.collection('student_notifications').find(filter).sort({ created_at: -1 }).toArray()
+    res.status(200).json(notes)
+  } catch (error: any) {
+    res.status(500).json({ error: error.message })
+  }
+})
+
+app.post('/api/student-notifications', async (req, res) => {
+  try {
+    const errors = validateStudentNotification(req.body)
+    if (errors.length) return res.status(400).json({ error: errors.join('; ') })
+    const note = { ...req.body, created_at: new Date().toISOString() }
+    delete note._id
+    const result = await db.collection('student_notifications').insertOne(note)
+    res.status(201).json({ _id: result.insertedId, ...note })
   } catch (error: any) {
     res.status(500).json({ error: error.message })
   }
