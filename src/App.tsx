@@ -5,11 +5,10 @@ import { ThemeProvider, CssBaseline, Box, CircularProgress } from '@mui/material
 import { useAuth0 } from '@auth0/auth0-react'
 import { theme, tokens } from './theme'
 import { Shell } from './shared/components/Shell'
-import { DashboardView } from './modules/dashboard/views/DashboardView'
 import { StudentDetailView } from './modules/student/views/StudentDetailView'
 import { LoginView } from './modules/auth/views/LoginView'
 import { useAuthStore } from './shared/stores/authStore'
-import { ClassView } from './modules/class/views/ClassView'
+import { ClassWorkspaceView } from './modules/class/views/ClassWorkspaceView'
 import { WeeklyScheduleView } from './modules/schedule/views/WeeklyScheduleView'
 import { HomeView } from './modules/home/views/HomeView'
 
@@ -49,10 +48,10 @@ function AppRoutes() {
     <Shell>
       <Routes>
         <Route path="/" element={<HomeView />} />
-        <Route path="/overview" element={<DashboardView />} />
+        <Route path="/overview" element={<Navigate to="/class" replace />} />
         <Route path="/student/:id" element={<StudentDetailView />} />
         <Route path="/student" element={<StudentDetailView />} />
-        <Route path="/class" element={<ClassView />} />
+        <Route path="/class" element={<ClassWorkspaceView />} />
         <Route path="/schedule" element={<WeeklyScheduleView />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
