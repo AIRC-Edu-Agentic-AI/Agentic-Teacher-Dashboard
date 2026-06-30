@@ -156,3 +156,32 @@ export interface ConceptGraph {
   edges: ConceptEdge[]
   subject_domain: string
 }
+
+// ─── Schedule events (classes / lectures / tasks) ────────────────────────────
+
+export type ScheduleEventKind = 'class' | 'lecture' | 'task'
+export type ClassType = 'Regular' | 'Makeup'
+export type TaskSource = 'suggestion' | 'intervention' | 'manual'
+export type TaskStatus = 'open' | 'done' | 'dismissed'
+
+export interface ScheduleEvent {
+  _id?: string
+  module: string
+  presentation: string
+  kind: ScheduleEventKind
+  title: string
+  date: string            // ISO datetime — the calendar axis
+  week: number | null     // course week (lectures); null otherwise
+
+  classroom?: string
+  class_type?: ClassType
+
+  materials_url?: string
+
+  source?: TaskSource
+  student_id?: number | null
+  status?: TaskStatus
+  linked_notification_id?: string | null
+
+  created_at: string
+}
