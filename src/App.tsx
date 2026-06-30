@@ -10,6 +10,7 @@ import { StudentDetailView } from './modules/student/views/StudentDetailView'
 import { LoginView } from './modules/auth/views/LoginView'
 import { useAuthStore } from './shared/stores/authStore'
 import { ClassView } from './modules/class/views/ClassView'
+import { WeeklyScheduleView } from './modules/schedule/views/WeeklyScheduleView'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -50,6 +51,7 @@ function AppRoutes() {
         <Route path="/student/:id" element={<StudentDetailView />} />
         <Route path="/student" element={<StudentDetailView />} />
         <Route path="/class" element={<ClassView />} />
+        <Route path="/schedule" element={<WeeklyScheduleView />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Shell>

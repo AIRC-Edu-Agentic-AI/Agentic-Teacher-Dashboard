@@ -1,5 +1,4 @@
 import React from 'react';
-import ScheduleCrud from '../components/ScheduleCrud';
 import NotificationManager from '../components/NotificationManager';
 import AttendanceDashboard from '../components/AttendanceDashboard';
 
@@ -11,7 +10,6 @@ export const ClassView = () => {
       </h1>
       
       <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-        <ScheduleCrud />
         <AttendanceDashboard />
         <NotificationManager />
       </div>
