@@ -1,17 +1,12 @@
 import { useParams, useNavigate } from 'react-router-dom'
-import { Box, Typography, Button, Grid, Toolbar, CircularProgress } from '@mui/material'
+import { Box, Typography, Button, Toolbar, CircularProgress } from '@mui/material'
 import { useQuery } from '@tanstack/react-query'
 import ChatIcon from '@mui/icons-material/ChatBubbleOutlineRounded'
 import ArrowBackIcon from '@mui/icons-material/ArrowBackRounded'
 import { container } from '../../../di/container'
 import { tokens } from '../../../theme'
 import { useContextStore } from '../../../shared/stores/contextStore'
-import { StudentDemographicsCard } from '../components/StudentDemographicsCard'
-import { RiskTrajectoryChart }     from '../components/RiskTrajectoryChart'
-import { VleActivityChart }        from '../components/VleActivityChart'
-import { AssessmentPanel }         from '../components/AssessmentPanel'
-import { StudentNotesCard }        from '../components/StudentNotesCard'
-import { MasteryGraphCard }        from '../components/MasteryGraphCard'
+import { StudentDetailContent } from '../components/StudentDetailContent'
 
 export function StudentDetailView() {
   const { id } = useParams<{ id: string }>()
@@ -60,35 +55,12 @@ export function StudentDetailView() {
       </Toolbar>
 
       <Box sx={{ flex: 1, overflow: 'auto', p: 3 }}>
-        <Grid container spacing={2}>
-          <Grid item xs={12} md={4}>
-            <Grid container spacing={2} sx={{ height: '100%' }}>
-              <Grid item xs={12}>
-                <StudentDemographicsCard student={student} />
-              </Grid>
-              <Grid item xs={12}>
-                <StudentNotesCard studentId={student.id_student} />
-              </Grid>
-            </Grid>
-          </Grid>
-
-          <Grid item xs={12} md={8}>
-            <Grid container spacing={2}>
-              <Grid item xs={12}>
-                <RiskTrajectoryChart student={student} currentWeek={currentWeek} />
-              </Grid>
-              <Grid item xs={12}>
-                <VleActivityChart student={student} currentWeek={currentWeek} />
-              </Grid>
-              <Grid item xs={12}>
-                <AssessmentPanel student={student} currentWeek={currentWeek} />
-              </Grid>
-              <Grid item xs={12}>
-                <MasteryGraphCard student={student} module={selectedModule} />
-              </Grid>
-            </Grid>
-          </Grid>
-        </Grid>
+        <StudentDetailContent
+          student={student}
+          module={selectedModule}
+          presentation={selectedPresentation}
+          currentWeek={currentWeek}
+        />
       </Box>
     </Box>
   )
