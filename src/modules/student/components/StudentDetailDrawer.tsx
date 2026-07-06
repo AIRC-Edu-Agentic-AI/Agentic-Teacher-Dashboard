@@ -6,10 +6,14 @@ import { useContextStore } from '../../../shared/stores/contextStore'
 import { StudentDetailContent } from './StudentDetailContent'
 
 export function StudentDetailDrawer() {
-  const { detailTarget, closeStudentDetail, currentWeek, setActiveStudent, setChatPanelOpen } = useContextStore()
+  const { detailTarget, closeStudentDetail, currentWeek, setActiveStudent, setChatPanelOpen, setModule, setPresentation } = useContextStore()
 
   function discuss() {
     if (!detailTarget) return
+    // Align the global course context with THIS student's course so the chat
+    // agent reasons over the right course (the roster is cross-course).
+    setModule(detailTarget.module)
+    setPresentation(detailTarget.presentation)
     setActiveStudent(detailTarget.student)
     setChatPanelOpen(true)
     closeStudentDetail()
