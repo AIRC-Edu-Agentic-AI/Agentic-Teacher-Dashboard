@@ -21,4 +21,13 @@ describe('ApiScheduleAdapter', () => {
     await expect(adapter.create({ module: 'AAA', presentation: '2013J', kind: 'task', title: 't', date: 'd', week: null } as any))
       .rejects.toThrow(/400: task requires status/)
   })
+
+  it('listAll fetches all events with no query params', async () => {
+    const events = [{ _id: '1', module: 'AAA', presentation: '2013J', kind: 'class' }]
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => events }))
+    const result = await adapter.listAll()
+    expect(result).toEqual(events)
+    const url = (fetch as any).mock.calls[0][0] as string
+    expect(url).toMatch(/\/schedule-events$/)
+  })
 })

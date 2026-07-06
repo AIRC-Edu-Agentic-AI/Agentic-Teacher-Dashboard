@@ -19,6 +19,10 @@ export class ApiScheduleAdapter implements ScheduleService {
     return handle<ScheduleEvent[]>(await fetch(`${API_BASE}/schedule-events?${params.toString()}`))
   }
 
+  async listAll(): Promise<ScheduleEvent[]> {
+    return handle<ScheduleEvent[]>(await fetch(`${API_BASE}/schedule-events`))
+  }
+
   async create(event: Omit<ScheduleEvent, '_id' | 'created_at'>): Promise<ScheduleEvent> {
     return handle<ScheduleEvent>(await fetch(`${API_BASE}/schedule-events`, {
       method: 'POST',
