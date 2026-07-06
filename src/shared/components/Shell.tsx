@@ -10,6 +10,7 @@ import { moduleRegistry } from '../../modules/registry'
 import { useContextStore } from '../stores/contextStore'
 import { ChatPanel } from '../../modules/chat/components/ChatPanel'
 import { ContextBar } from './ContextBar'
+import { StudentDetailDrawer } from '../../modules/student/components/StudentDetailDrawer'
 
 const DRAWER_WIDTH = 220
 const CHAT_WIDTH   = 360
@@ -168,6 +169,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
           </Box>
         </Box>
       </Box>
+
+      <StudentDetailDrawer />
     </Box>
   )
 }

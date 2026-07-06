@@ -8,6 +8,7 @@ interface ContextState {
   numWeeks: number
   activeStudent: StudentProfile | null
   chatPanelOpen: boolean
+  detailTarget: { student: StudentProfile; module: string; presentation: string } | null
 
   setModule: (m: string) => void
   setPresentation: (p: string) => void
@@ -15,6 +16,8 @@ interface ContextState {
   setNumWeeks: (n: number) => void
   setActiveStudent: (s: StudentProfile | null) => void
   setChatPanelOpen: (open: boolean) => void
+  openStudentDetail: (t: { student: StudentProfile; module: string; presentation: string }) => void
+  closeStudentDetail: () => void
 }
 
 export const useContextStore = create<ContextState>((set) => ({
@@ -24,6 +27,7 @@ export const useContextStore = create<ContextState>((set) => ({
   numWeeks: 39,
   activeStudent: null,
   chatPanelOpen: false,
+  detailTarget: null,
 
   setModule: (selectedModule) => set({ selectedModule }),
   setPresentation: (selectedPresentation) => set({ selectedPresentation }),
@@ -31,4 +35,6 @@ export const useContextStore = create<ContextState>((set) => ({
   setNumWeeks: (numWeeks) => set({ numWeeks }),
   setActiveStudent: (activeStudent) => set({ activeStudent }),
   setChatPanelOpen: (chatPanelOpen) => set({ chatPanelOpen }),
+  openStudentDetail: (detailTarget) => set({ detailTarget }),
+  closeStudentDetail: () => set({ detailTarget: null }),
 }))
