@@ -86,3 +86,19 @@ export function computeSuggestions(course: ProcessedCourse, week: number): Sugge
     ...assessmentRisk(course, week),
   ]
 }
+
+export interface CourseSuggestion {
+  card: SuggestionCard
+  module: string
+  presentation: string
+}
+
+export function aggregateSuggestions(courses: ProcessedCourse[], week: number): CourseSuggestion[] {
+  const out: CourseSuggestion[] = []
+  for (const course of courses) {
+    for (const card of computeSuggestions(course, week)) {
+      out.push({ card, module: course.module, presentation: course.presentation })
+    }
+  }
+  return out
+}

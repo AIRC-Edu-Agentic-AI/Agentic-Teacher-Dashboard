@@ -45,3 +45,24 @@ describe('computeSuggestions', () => {
     expect(computeSuggestions(calm, 3)).toEqual([])
   })
 })
+
+import { aggregateSuggestions } from './suggestionRules'
+
+describe('aggregateSuggestions', () => {
+  it('tags each course’s cards with that course', () => {
+    // `course` fixture from this file has an escalation at week 3 for student 11.
+    const a = { ...course, module: 'AAA', presentation: '2013J' }
+    const b = { ...course, module: 'BBB', presentation: '2014J' }
+    const result = aggregateSuggestions([a, b], 3)
+    expect(result.length).toBeGreaterThan(0)
+    expect(new Set(result.map((r) => r.module))).toEqual(new Set(['AAA', 'BBB']))
+    for (const r of result) {
+      expect(r.card).toHaveProperty('id')
+      expect(typeof r.presentation).toBe('string')
+    }
+  })
+  it('returns empty when no course has signals', () => {
+    const calm = { ...course, students: [course.students[1]] } // student 12 is steady
+    expect(aggregateSuggestions([calm], 3)).toEqual([])
+  })
+})
