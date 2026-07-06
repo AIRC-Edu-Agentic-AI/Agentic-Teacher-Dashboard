@@ -7,6 +7,9 @@ export interface DataService {
   /** Returns full student profiles for a module + presentation. */
   getCourse(module: string, presentation: string): Promise<ProcessedCourse>
 
+  /** Returns full processed data for every course in the index. */
+  getAllCourses(): Promise<ProcessedCourse[]>
+
   /** Convenience: returns a single student profile from the loaded course. */
   getStudent(
     module: string,

@@ -16,6 +16,11 @@ export class MongoDataAdapter implements DataService {
     return await res.json() as ProcessedCourse
   }
 
+  async getAllCourses(): Promise<ProcessedCourse[]> {
+    const idx = await this.getIndex()
+    return Promise.all(idx.courses.map((c) => this.getCourse(c.module, c.presentation)))
+  }
+
   async getStudent(module: string, presentation: string, studentId: number): Promise<StudentProfile | null> {
     const res = await fetch(`${API_BASE}/student/${module}/${presentation}/${studentId}`)
     if (!res.ok) return null

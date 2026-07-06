@@ -28,6 +28,11 @@ export class ProcessedDataAdapter implements DataService {
     return data
   }
 
+  async getAllCourses(): Promise<ProcessedCourse[]> {
+    const idx = await this.getIndex()
+    return Promise.all(idx.courses.map((c) => this.getCourse(c.module, c.presentation)))
+  }
+
   async getStudent(
     module: string,
     presentation: string,
