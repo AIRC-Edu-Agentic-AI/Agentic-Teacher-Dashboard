@@ -108,6 +108,7 @@ export function WeeklyScheduleView() {
         open={dialogOpen}
         initial={editing ?? undefined}
         defaultDate={editing?.date ?? new Date().toISOString()}
+        currentWeek={currentWeek}
         onClose={() => { setDialogOpen(false); setEditing(null) }}
         onSave={handleSave}
         onDelete={editing?._id ? handleDelete : undefined}

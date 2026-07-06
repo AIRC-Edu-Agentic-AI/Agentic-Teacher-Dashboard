@@ -5,12 +5,14 @@ import {
 } from '@mui/material'
 import { useQuery } from '@tanstack/react-query'
 import { container } from '../../../di/container'
+import { PRESENTATION_ANCHORS, weekToDate } from '../../../shared/scheduleAnchors'
 import type { ScheduleEvent, ScheduleEventKind, ClassType } from '../../../types/domain'
 
 export interface ScheduleEventDialogProps {
   open: boolean
   initial?: Partial<ScheduleEvent>
   defaultDate: string                 // ISO, used when creating
+  currentWeek: number                 // viewing week — anchors a new event's default date to its course
   onClose: () => void
   onSave: (data: Omit<ScheduleEvent, '_id' | 'created_at'>) => Promise<void>
   onDelete?: () => Promise<void>      // present only when editing
@@ -20,7 +22,12 @@ const KINDS: ScheduleEventKind[] = ['class', 'lecture', 'task']
 const CLASS_TYPES: ClassType[] = ['Regular', 'Makeup']
 
 export function ScheduleEventDialog(props: ScheduleEventDialogProps) {
-  const { open, initial, defaultDate, onClose, onSave, onDelete } = props
+  const { open, initial, defaultDate, currentWeek, onClose, onSave, onDelete } = props
+
+  // A new event defaults to its course's current-week date (the OULAD data is
+  // historical, so wall-clock "today" would land outside every agenda window).
+  const createDateFor = (p: string): string =>
+    PRESENTATION_ANCHORS[p] ? weekToDate(p, currentWeek).slice(0, 10) : defaultDate.slice(0, 10)
   const [kind, setKind] = useState<ScheduleEventKind>('class')
   const [title, setTitle] = useState('')
   const [date, setDate] = useState(defaultDate.slice(0, 10))
@@ -40,7 +47,6 @@ export function ScheduleEventDialog(props: ScheduleEventDialogProps) {
     if (!open) return
     setKind((initial?.kind as ScheduleEventKind) ?? 'class')
     setTitle(initial?.title ?? '')
-    setDate((initial?.date ?? defaultDate).slice(0, 10))
     setClassroom(initial?.classroom ?? '')
     setClassType((initial?.class_type as ClassType) ?? 'Regular')
     setError(null)
@@ -48,7 +54,8 @@ export function ScheduleEventDialog(props: ScheduleEventDialogProps) {
     const firstPres = props.initial?.presentation ?? index?.courses.find((c) => c.module === firstMod)?.presentation ?? ''
     setMod(firstMod)
     setPres(firstPres)
-  }, [open, initial, defaultDate, index])
+    setDate(initial?._id ? (initial.date ?? defaultDate).slice(0, 10) : createDateFor(firstPres))
+  }, [open, initial, defaultDate, index, currentWeek])
 
   async function handleSave() {
     setSaving(true); setError(null)
@@ -83,15 +90,17 @@ export function ScheduleEventDialog(props: ScheduleEventDialogProps) {
                 <InputLabel>Module</InputLabel>
                 <Select label="Module" value={mod} onChange={(e) => {
                   const m = e.target.value
+                  const p = index?.courses.find((c) => c.module === m)?.presentation ?? ''
                   setMod(m)
-                  setPres(index?.courses.find((c) => c.module === m)?.presentation ?? '')
+                  setPres(p)
+                  setDate(createDateFor(p))
                 }}>
                   {moduleOptions.map((m) => <MenuItem key={m} value={m}>{m}</MenuItem>)}
                 </Select>
               </FormControl>
               <FormControl size="small" fullWidth>
                 <InputLabel>Presentation</InputLabel>
-                <Select label="Presentation" value={pres} onChange={(e) => setPres(e.target.value)}>
+                <Select label="Presentation" value={pres} onChange={(e) => { setPres(e.target.value); setDate(createDateFor(e.target.value)) }}>
                   {presentationOptions.map((p) => <MenuItem key={p} value={p}>{p}</MenuItem>)}
                 </Select>
               </FormControl>
