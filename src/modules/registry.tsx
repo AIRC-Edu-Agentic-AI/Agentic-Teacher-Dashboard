@@ -14,6 +14,6 @@ export interface ModuleConfig {
 export const moduleRegistry: ModuleConfig[] = [
   { id: 'home', label: 'Home', path: '/', icon: <HomeIcon fontSize="small" /> },
   { id: 'schedule', label: 'Weekly Schedule', path: '/schedule', icon: <CalendarIcon fontSize="small" /> },
-  { id: 'student', label: 'Student detail', path: '/student', icon: <PersonIcon fontSize="small" /> },
+  { id: 'students', label: 'Student Management', path: '/students', icon: <PersonIcon fontSize="small" /> },
   { id: 'class', label: 'Class', path: '/class', icon: <ClassIcon fontSize="small" /> },
 ]

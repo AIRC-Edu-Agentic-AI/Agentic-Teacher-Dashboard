@@ -6,6 +6,7 @@ import { useAuth0 } from '@auth0/auth0-react'
 import { theme, tokens } from './theme'
 import { Shell } from './shared/components/Shell'
 import { StudentDetailView } from './modules/student/views/StudentDetailView'
+import { StudentManagementView } from './modules/students/views/StudentManagementView'
 import { LoginView } from './modules/auth/views/LoginView'
 import { useAuthStore } from './shared/stores/authStore'
 import { ClassWorkspaceView } from './modules/class/views/ClassWorkspaceView'
@@ -51,6 +52,7 @@ function AppRoutes() {
         <Route path="/overview" element={<Navigate to="/class" replace />} />
         <Route path="/student/:id" element={<StudentDetailView />} />
         <Route path="/student" element={<StudentDetailView />} />
+        <Route path="/students" element={<StudentManagementView />} />
         <Route path="/class" element={<ClassWorkspaceView />} />
         <Route path="/schedule" element={<WeeklyScheduleView />} />
         <Route path="*" element={<Navigate to="/" replace />} />
