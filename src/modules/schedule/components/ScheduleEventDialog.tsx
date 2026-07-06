@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
 import {
   Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField,
-  MenuItem, Stack, Alert,
+  MenuItem, Stack, Alert, Select, FormControl, InputLabel,
 } from '@mui/material'
+import { useQuery } from '@tanstack/react-query'
+import { container } from '../../../di/container'
 import type { ScheduleEvent, ScheduleEventKind, ClassType } from '../../../types/domain'
 
 export interface ScheduleEventDialogProps {
@@ -27,6 +29,13 @@ export function ScheduleEventDialog(props: ScheduleEventDialogProps) {
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
+  const isCreate = !props.initial?._id
+  const [mod, setMod] = useState('')
+  const [pres, setPres] = useState('')
+  const { data: index } = useQuery({ queryKey: ['oulad-index'], queryFn: () => container.dataService.getIndex(), retry: false })
+  const moduleOptions = [...new Set(index?.courses.map((c) => c.module) ?? [])]
+  const presentationOptions = index?.courses.filter((c) => c.module === mod).map((c) => c.presentation) ?? []
+
   useEffect(() => {
     if (!open) return
     setKind((initial?.kind as ScheduleEventKind) ?? 'class')
@@ -35,13 +44,17 @@ export function ScheduleEventDialog(props: ScheduleEventDialogProps) {
     setClassroom(initial?.classroom ?? '')
     setClassType((initial?.class_type as ClassType) ?? 'Regular')
     setError(null)
-  }, [open, initial, defaultDate])
+    const firstMod = props.initial?.module ?? index?.courses[0]?.module ?? ''
+    const firstPres = props.initial?.presentation ?? index?.courses.find((c) => c.module === firstMod)?.presentation ?? ''
+    setMod(firstMod)
+    setPres(firstPres)
+  }, [open, initial, defaultDate, index])
 
   async function handleSave() {
     setSaving(true); setError(null)
     try {
       const data: Omit<ScheduleEvent, '_id' | 'created_at'> = {
-        module: initial!.module!, presentation: initial!.presentation!,
+        module: mod, presentation: pres,
         kind, title: title.trim(), date: new Date(`${date}T09:00:00.000Z`).toISOString(),
         week: initial?.week ?? null,
         ...(kind === 'class' ? { classroom: classroom.trim(), class_type: classType } : {}),
@@ -64,6 +77,26 @@ export function ScheduleEventDialog(props: ScheduleEventDialogProps) {
           <TextField select label="Kind" value={kind} onChange={(e) => setKind(e.target.value as ScheduleEventKind)} disabled={!!initial?._id}>
             {KINDS.map((k) => <MenuItem key={k} value={k}>{k}</MenuItem>)}
           </TextField>
+          {isCreate && (
+            <>
+              <FormControl size="small" fullWidth>
+                <InputLabel>Module</InputLabel>
+                <Select label="Module" value={mod} onChange={(e) => {
+                  const m = e.target.value
+                  setMod(m)
+                  setPres(index?.courses.find((c) => c.module === m)?.presentation ?? '')
+                }}>
+                  {moduleOptions.map((m) => <MenuItem key={m} value={m}>{m}</MenuItem>)}
+                </Select>
+              </FormControl>
+              <FormControl size="small" fullWidth>
+                <InputLabel>Presentation</InputLabel>
+                <Select label="Presentation" value={pres} onChange={(e) => setPres(e.target.value)}>
+                  {presentationOptions.map((p) => <MenuItem key={p} value={p}>{p}</MenuItem>)}
+                </Select>
+              </FormControl>
+            </>
+          )}
           <TextField label="Title" value={title} onChange={(e) => setTitle(e.target.value)} required />
           <TextField type="date" label="Date" value={date} onChange={(e) => setDate(e.target.value)} InputLabelProps={{ shrink: true }} />
           {kind === 'class' && (
