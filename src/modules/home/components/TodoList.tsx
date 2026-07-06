@@ -3,28 +3,27 @@ import { Box, Typography, Paper, Stack, Chip, Button, Alert } from '@mui/materia
 import { container } from '../../../di/container'
 import { useContextStore } from '../../../shared/stores/contextStore'
 import { eventBadge } from '../../schedule/eventDisplay'
+import { inCourseWindow } from '../../schedule/agenda'
 import type { ScheduleEvent } from '../../../types/domain'
 
 export function TodoList({ reloadKey }: { reloadKey: number }) {
-  const { selectedModule, selectedPresentation } = useContextStore()
+  const { currentWeek } = useContextStore()
   const [items, setItems] = useState<ScheduleEvent[]>([])
   const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
-    if (!selectedModule || !selectedPresentation) return
     setError(null)
     try {
-      const all = await container.scheduleService.list(selectedModule, selectedPresentation)
-      const now = Date.now()
+      const all = await container.scheduleService.listAll()
       const visible = all.filter((e) =>
         (e.kind === 'task' && e.status === 'open') ||
-        ((e.kind === 'class' || e.kind === 'lecture') && new Date(e.date).getTime() >= now))
+        ((e.kind === 'class' || e.kind === 'lecture') && inCourseWindow(e, currentWeek, 0, 4)))
       visible.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
       setItems(visible)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load to-do list')
     }
-  }, [selectedModule, selectedPresentation])
+  }, [currentWeek])
 
   useEffect(() => { load() }, [load, reloadKey])
 
@@ -52,7 +51,7 @@ export function TodoList({ reloadKey }: { reloadKey: number }) {
               <Box sx={{ mr: 'auto' }}>
                 <Typography sx={{ fontSize: 13 }}>{badge.emoji} {e.title}</Typography>
                 <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>
-                  {new Date(e.date).toLocaleDateString()} · <Chip component="span" label={badge.label} size="small" sx={{ height: 16, fontSize: 9 }} />
+                  {new Date(e.date).toLocaleDateString()} · {e.module} {e.presentation} · <Chip component="span" label={badge.label} size="small" sx={{ height: 16, fontSize: 9 }} />
                 </Typography>
               </Box>
               {e.kind === 'task' && e.status === 'open' &&
